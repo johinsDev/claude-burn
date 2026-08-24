@@ -21,11 +21,14 @@ import {
 import { Badge, Meter, Panel, PanelHead, Stat } from "@/components/ui/primitives";
 import { ago, count, limitTone, money, pct, resetState, toneClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
+import type { Translate } from "@/lib/format";
 import { ChartFrame, fmt, tooltipStyle } from "@/components/ui/chart-frame";
 
 const ACCOUNT_COLORS = ["var(--color-hot)", "var(--color-cool)", "var(--color-ok)"];
 
 export function Overview({ data }: { data: OverviewData }) {
+  const t = useT();
   const accountNames = useMemo(
     () => [...new Set(data.by_day.map((r) => r.account))].toSorted(),
     [data.by_day],
@@ -53,35 +56,35 @@ export function Overview({ data }: { data: OverviewData }) {
       <div className="grid grid-cols-4 gap-3">
         <Panel>
           <Stat
-            label="Hoy · facturado"
+            label={t("Today · billed")}
             value={money(data.today_billable_usd)}
             sub={
               theoretical > 0.005
-                ? `+ ${money(theoretical)} de consumo en tarifa plana`
-                : "solo cuentas con overage"
+                ? t("+ {v} on flat rate", { v: money(theoretical) })
+                : t("overage accounts only")
             }
           />
         </Panel>
         <Panel>
           <Stat
-            label="7 dias · facturado"
+            label={t("7 days · billed")}
             value={money(data.week_billable_usd, { compact: true })}
-            sub={flatSub(data.week_usd - data.week_billable_usd)}
+            sub={flatSub(data.week_usd - data.week_billable_usd, t)}
           />
         </Panel>
         <Panel>
           <Stat
-            label="30 dias · facturado"
+            label={t("30 days · billed")}
             value={money(data.month_billable_usd, { compact: true })}
-            sub={flatSub(data.month_usd - data.month_billable_usd)}
+            sub={flatSub(data.month_usd - data.month_billable_usd, t)}
           />
         </Panel>
         <Panel>
           <Stat
-            label="Releer contexto"
+            label={t("Re-reading context")}
             value={pct(data.composition.cache_read, total)}
             tone={data.composition.cache_read / (total || 1) > 0.5 ? "text-crit" : undefined}
-            sub="del gasto historico"
+            sub={t("of all-time spend")}
           />
         </Panel>
       </div>
@@ -89,7 +92,7 @@ export function Overview({ data }: { data: OverviewData }) {
       <div className="grid grid-cols-3 gap-3">
         <Panel className="col-span-2">
           <PanelHead
-            title="Gasto por dia"
+            title={t("Spend per day")}
             right={
               <div className="flex gap-3">
                 {accountNames.map((a, i) => (
@@ -144,7 +147,7 @@ export function Overview({ data }: { data: OverviewData }) {
         </Panel>
 
         <Panel>
-          <PanelHead title="En que se va la plata" />
+          <PanelHead title={t("Where the money goes")} />
           <ChartFrame height={210}>
             <BarChart
               data={comp}
@@ -192,7 +195,7 @@ export function Overview({ data }: { data: OverviewData }) {
               }
               right={
                 <span className="text-[10px] text-ink-faint">
-                  {a.plan_usage ? ago(a.plan_usage.fetched_at_ms) : "sin cache"}
+                  {a.plan_usage ? ago(a.plan_usage.fetched_at_ms, t) : t("no cache")}
                 </span>
               }
             />
@@ -207,13 +210,13 @@ export function Overview({ data }: { data: OverviewData }) {
 
               {(a.plan_usage?.limits ?? []).filter((l) => l.is_active).length === 0 ? (
                 <p className="text-[11px] text-ink-faint">
-                  Sin datos de limite. Se refresca cuando corras Claude Code en esta cuenta.
+                  {t("No limit data. It refreshes when you run Claude Code in this account.")}
                 </p>
               ) : (
                 a.plan_usage?.limits
                   .filter((l) => l.is_active)
                   .map((l) => {
-                    const reset = resetState(l.resets_at);
+                    const reset = resetState(l.resets_at, t);
                     const tone = reset.stale ? "ok" : limitTone(l.percent);
                     return (
                       <div
@@ -222,7 +225,7 @@ export function Overview({ data }: { data: OverviewData }) {
                       >
                         <div className="flex items-baseline justify-between">
                           <span className="text-[11px] text-ink-dim">
-                            {l.kind === "session" ? "sesion (5 h)" : "semanal"}
+                            {l.kind === "session" ? t("session (5 h)") : t("weekly")}
                           </span>
                           <span className={cn("num text-[11px] font-semibold", toneClass[tone])}>
                             {l.percent.toFixed(0)}%
@@ -238,7 +241,7 @@ export function Overview({ data }: { data: OverviewData }) {
               {a.live_sessions.length > 0 ? (
                 <div className="border-t border-line pt-2.5">
                   <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
-                    corriendo ahora
+                    {t("running now")}
                   </div>
                   {a.live_sessions.map((s) => (
                     <div key={s.pid} className="flex items-center justify-between py-0.5">
@@ -264,6 +267,7 @@ export function Overview({ data }: { data: OverviewData }) {
  * dia de aca al cierre.
  */
 function MonthBudgetPanel({ pace }: { pace: MonthPace }) {
+  const t = useT();
   // Filtrar por una cuenta de tarifa plana no puede cambiar tu factura. Antes
   // el panel seguia mostrando el techo de la cuenta facturable y parecia que el filtro
   // no funcionaba; decir por que es mas util que fingir un numero.
@@ -271,20 +275,20 @@ function MonthBudgetPanel({ pace }: { pace: MonthPace }) {
     return (
       <Panel>
         <PanelHead
-          title={`${pace.scoped_flat_account} · tarifa plana`}
+          title={t("{a} · flat rate", { a: pace.scoped_flat_account })}
           right={
             <span className="text-[10px] text-ink-faint">
-              no entra en el techo
+              {t("not counted against the cap")}
             </span>
           }
         />
         <div className="grid grid-cols-3 divide-x divide-line">
-          <Stat label="Consumo de hoy" value={money(pace.today.spent_usd)} />
-          <Stat label="Consumo de la semana" value={money(pace.week.spent_usd)} />
+          <Stat label={t("Spent today")} value={money(pace.today.spent_usd)} />
+          <Stat label={t("Spent this week")} value={money(pace.week.spent_usd)} />
           <Stat
-            label={`Consumo de ${pace.month}`}
+            label={t("Spent in {m}", { m: pace.month })}
             value={money(pace.spent_usd)}
-            sub="valor de API, no se factura"
+            sub={t("API value, not billed")}
           />
         </div>
       </Panel>
@@ -297,45 +301,45 @@ function MonthBudgetPanel({ pace }: { pace: MonthPace }) {
   return (
     <Panel>
       <PanelHead
-        title="Como vamos"
-        right={<span className="text-[10px] text-ink-faint">solo cuentas con overage</span>}
+        title={t("How we're doing")}
+        right={<span className="text-[10px] text-ink-faint">{t("overage accounts only")}</span>}
       />
       <div className="grid grid-cols-3 divide-x divide-line">
         <BudgetMeter
-          label="Hoy"
+          label={t("Today")}
           spent={pace.today.spent_usd}
           budget={pace.today.budget_usd}
           foot={`corte a las ${pace.today.elapsed_label}`}
         />
         <BudgetMeter
-          label="Esta semana"
+          label={t("This week")}
           spent={pace.week.spent_usd}
           budget={pace.week.budget_usd}
           foot={pace.week.elapsed_label}
         />
         <BudgetMeter
-          label={`Mes ${pace.month}`}
+          label={t("Month {m}", { m: pace.month })}
           spent={spent}
           budget={budget}
-          foot={`dia ${pace.day} de ${pace.days_in_month}`}
+          foot={t("day {d} of {n}", { d: pace.day, n: pace.days_in_month })}
         />
       </div>
       {budget ? (
         <div className="grid grid-cols-2 divide-x divide-line border-t border-line">
           <Stat
-            label="Proyeccion al cierre del mes"
+            label={t("Projected month-end")}
             value={money(projected, { compact: true })}
             tone={projected >= budget ? "text-crit" : undefined}
-            sub={`${((projected / budget) * 100).toFixed(0)}% del techo al ritmo actual`}
+            sub={t("{p}% of the cap at the current pace", { p: ((projected / budget) * 100).toFixed(0) })}
           />
           <Stat
-            label="Podes gastar por dia"
+            label={t("You can spend per day")}
             value={money(pace.daily_allowance_usd ?? 0)}
             tone={pace.daily_allowance_usd === 0 ? "text-crit" : undefined}
             sub={
               pace.daily_allowance_usd === 0
-                ? "el techo del mes ya se paso"
-                : `en los ${daysLeft} dias que quedan`
+                ? t("the monthly cap is already blown")
+                : t("over the {n} days left", { n: daysLeft })
             }
           />
         </div>
@@ -356,12 +360,13 @@ function BudgetMeter({
   budget: number | null;
   foot: string;
 }) {
+  const t = useT();
   if (!budget) {
     return (
       <div className="px-3.5 py-3">
         <div className="text-[10px] uppercase tracking-wider text-ink-faint">{label}</div>
         <div className="num mt-1 text-xl font-semibold">{money(spent)}</div>
-        <div className="mt-1 text-[10px] text-ink-faint">sin techo definido</div>
+        <div className="mt-1 text-[10px] text-ink-faint">{t("no cap set")}</div>
       </div>
     );
   }
@@ -384,7 +389,7 @@ function BudgetMeter({
       <div className="flex justify-between text-[10px] text-ink-faint">
         <span>{foot}</span>
         <span className={cn(left < 0 && toneClass.crit)}>
-          {left >= 0 ? `${money(left)} libres` : `${money(-left)} pasado`}
+          {left >= 0 ? t("{v} free", { v: money(left) }) : t("{v} over", { v: money(-left) })}
         </span>
       </div>
     </div>
@@ -399,31 +404,32 @@ function BudgetMeter({
  * de arriba no los cuenta — pero Anthropic si los factura.
  */
 function SubagentPanel({ split }: { split: SubagentSplit }) {
+  const t = useT();
   if (split.turns === 0) return null;
   const share = split.cost_usd / (split.total_usd || 1);
   return (
     <Panel>
       <PanelHead
-        title="Subagentes"
+        title={t("Subagents")}
         right={
           <span className="text-[10px] text-ink-faint">
-            transcripts aparte · se facturan igual
+            {t("separate transcripts · billed all the same")}
           </span>
         }
       />
       <div className="grid grid-cols-4 divide-x divide-line">
         <Stat
-          label="Costo"
+          label={t("Cost")}
           value={money(split.cost_usd)}
           tone={share > 0.1 ? "text-warn" : undefined}
-          sub={`${(share * 100).toFixed(1)}% del gasto del periodo`}
+          sub={t("{p}% of the period's spend", { p: (share * 100).toFixed(1) })}
         />
-        <Stat label="Turnos" value={count(split.turns)} />
-        <Stat label="Agentes lanzados" value={count(split.agents)} />
+        <Stat label={t("Turns")} value={count(split.turns)} />
+        <Stat label={t("Agents spawned")} value={count(split.agents)} />
         <Stat
-          label="Sesiones que los usan"
+          label={t("Sessions using them")}
           value={count(split.sessions)}
-          sub="mira la columna sub en Sesiones"
+          sub={t("see the sub column under Sessions")}
         />
       </div>
     </Panel>
@@ -431,10 +437,10 @@ function SubagentPanel({ split }: { split: SubagentSplit }) {
 }
 
 /** El pie de los totales: lo que se consumio pero no se factura. */
-function flatSub(theoretical: number): string {
+function flatSub(theoretical: number, t: Translate): string {
   return theoretical > 0.005
-    ? `+ ${money(theoretical, { compact: true })} de tarifa plana`
-    : "solo cuentas con overage";
+    ? t("+ {v} on flat rate", { v: money(theoretical, { compact: true }) })
+    : t("overage accounts only");
 }
 
 /**
@@ -443,7 +449,8 @@ function flatSub(theoretical: number): string {
  * algo que no leimos en ningun lado.
  */
 function BillingBadge({ billing }: { billing: Billing }) {
-  if (billing === "overage") return <Badge tone="hot">overage · plata real</Badge>;
-  if (billing === "flat") return <Badge tone="neutral">tarifa plana</Badge>;
-  return <Badge tone="neutral">facturacion desconocida</Badge>;
+  const t = useT();
+  if (billing === "overage") return <Badge tone="hot">{t("overage · real money")}</Badge>;
+  if (billing === "flat") return <Badge tone="neutral">{t("flat rate")}</Badge>;
+  return <Badge tone="neutral">{t("unknown billing")}</Badge>;
 }

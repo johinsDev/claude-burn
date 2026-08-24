@@ -216,10 +216,10 @@ export type FiredAlert = {
 export type Filter = { account: string | null; since: string | null };
 
 export const PERIODS = [
-  { id: "1", label: "Hoy", days: 1 },
-  { id: "7", label: "7 dias", days: 7 },
-  { id: "30", label: "30 dias", days: 30 },
-  { id: "all", label: "Todo", days: null },
+  { id: "1", label: "Today", days: 1 },
+  { id: "7", label: "7 days", days: 7 },
+  { id: "30", label: "30 days", days: 30 },
+  { id: "all", label: "All", days: null },
 ] as const;
 
 export type PeriodId = (typeof PERIODS)[number]["id"];
@@ -241,6 +241,8 @@ export const api = {
   syncNow: () => invoke<number>("sync_now"),
   sessions: (filter?: Filter, limit?: number) =>
     invoke<SessionRow[]>("sessions", { filter, limit }),
+  lang: () => invoke<string>("lang"),
+  setLang: (lang: string) => invoke<void>("set_lang", { lang }),
   profilesList: () => invoke<ProfileEntry[]>("profiles_list"),
   profileAdd: (dir: string) => invoke<ProfileEntry[]>("profile_add", { dir }),
   profileSetHidden: (name: string, hidden: boolean) =>

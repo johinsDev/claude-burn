@@ -536,6 +536,26 @@ pub fn cleanup_subagents(state: State<'_, AppState>, older_than_days: u64) -> Re
     })
 }
 
+/// Idioma de la interfaz y de las notificaciones. `en` por defecto.
+///
+/// Vive dentro de AlertConfig y no en su propia clave: los textos de alerta
+/// los arma Rust, y dos fuentes de verdad para el idioma terminan en una
+/// notificacion en un idioma y la ventana en el otro.
+#[tauri::command]
+pub fn lang(state: State<'_, AppState>) -> Res<String> {
+    Ok(crate::alerts::load_config(&state).lang)
+}
+
+#[tauri::command]
+pub fn set_lang(state: State<'_, AppState>, lang: String) -> Res<()> {
+    if lang != "en" && lang != "es" {
+        return Err(format!("unknown language: {lang}"));
+    }
+    let mut cfg = crate::alerts::load_config(&state);
+    cfg.lang = lang;
+    crate::alerts::save_config(&state, &cfg).map_err(err)
+}
+
 /// Las cuentas conocidas, incluidas las ocultas, para la pantalla de ajustes.
 #[tauri::command]
 pub fn profiles_list(state: State<'_, AppState>) -> Res<Vec<profiles::ProfileEntry>> {

@@ -8,6 +8,7 @@ import { Empty, Panel, PanelHead, Stat } from "@/components/ui/primitives";
 import { ChartFrame, fmt, tooltipStyle } from "@/components/ui/chart-frame";
 import { count, money, pct, tokens } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 type Rate = { id: string; label: string; input: number; output: number };
 const RATES = new Map((pricingTable.models as Rate[]).map((m) => [m.id, m]));
@@ -48,6 +49,7 @@ export function Models({ scope }: { scope: Scope }) {
     [hist],
   );
   const histTotal = histData.reduce((s, r) => s + r.count, 0);
+  const t = useT();
   const heavy = histData.filter((r) => r.bucket >= 2).reduce((s, r) => s + r.count, 0);
 
   if (loading || !rows) return <Empty>cargando…</Empty>;
@@ -57,14 +59,14 @@ export function Models({ scope }: { scope: Scope }) {
       <div className="grid grid-cols-3 gap-3">
         <Panel>
           <Stat
-            label="Modelo mas caro"
+            label={t("Priciest model")}
             value={byModel[0]?.label ?? "—"}
             sub={byModel[0] ? `${money(byModel[0].cost)} · ${pct(byModel[0].cost, total)}` : ""}
           />
         </Panel>
         <Panel>
           <Stat
-            label="Si Fable hubiera sido Opus 5"
+            label={t("If Fable had been Opus 5")}
             value={savings > 0 ? `− ${money(savings)}` : "—"}
             tone={savings > 0 ? "text-ok" : undefined}
             sub="Fable cuesta el doble por token"
@@ -72,17 +74,17 @@ export function Models({ scope }: { scope: Scope }) {
         </Panel>
         <Panel>
           <Stat
-            label="Requests sobre 200k de contexto"
+            label={t("Requests above 200k context")}
             value={pct(heavy, histTotal)}
             tone={heavy / (histTotal || 1) > 0.5 ? "text-crit" : "text-warn"}
-            sub={`${count(heavy)} de ${count(histTotal)}`}
+            sub={t("{a} of {b}", { a: count(heavy), b: count(histTotal) })}
           />
         </Panel>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <Panel>
-          <PanelHead title="Gasto por modelo" />
+          <PanelHead title={t("Spend by model")} />
           <ChartFrame height={230}>
             <BarChart data={byModel} margin={{ top: 8, right: 10, bottom: 4, left: -14 }}>
               <CartesianGrid stroke="var(--color-line)" vertical={false} />
@@ -118,7 +120,7 @@ export function Models({ scope }: { scope: Scope }) {
         </Panel>
 
         <Panel>
-          <PanelHead title="Requests por tamano de contexto" />
+          <PanelHead title={t("Requests by context size")} />
           <ChartFrame height={230}>
             <BarChart data={histData} margin={{ top: 8, right: 10, bottom: 4, left: -14 }}>
               <CartesianGrid stroke="var(--color-line)" vertical={false} />
@@ -139,7 +141,7 @@ export function Models({ scope }: { scope: Scope }) {
               <Tooltip
                 {...tooltipStyle}
                 cursor={{ fill: "var(--color-panel-2)" }}
-                formatter={fmt((v) => [count(v), "requests"])}
+                formatter={fmt((v) => [count(v), t("requests")])}
               />
               <Bar dataKey="count" radius={[3, 3, 0, 0]}>
                 {histData.map((r) => (
@@ -161,16 +163,16 @@ export function Models({ scope }: { scope: Scope }) {
       </div>
 
       <Panel className="overflow-hidden">
-        <PanelHead title="Detalle por cuenta y modelo" />
+        <PanelHead title={t("Breakdown by account and model")} />
         <table className="w-full text-[11.5px]">
           <thead>
             <tr className="border-b border-line text-[10px] uppercase tracking-wider text-ink-faint">
-              <th className="px-3 py-2 text-left font-medium">cuenta</th>
-              <th className="px-3 py-2 text-left font-medium">modelo</th>
+              <th className="px-3 py-2 text-left font-medium">{t("account")}</th>
+              <th className="px-3 py-2 text-left font-medium">{t("model")}</th>
               <th className="px-3 py-2 text-right font-medium">$/MTok in · out</th>
-              <th className="px-3 py-2 text-right font-medium">turnos</th>
+              <th className="px-3 py-2 text-right font-medium">{t("turns")}</th>
               <th className="px-3 py-2 text-right font-medium">output</th>
-              <th className="px-3 py-2 text-right font-medium">costo</th>
+              <th className="px-3 py-2 text-right font-medium">{t("cost")}</th>
             </tr>
           </thead>
           <tbody>

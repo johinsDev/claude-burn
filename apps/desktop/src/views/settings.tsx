@@ -4,6 +4,7 @@ import { useAsyncData } from "@/hooks/use-async-data";
 import { Badge, Button, Empty, Panel, PanelHead } from "@/components/ui/primitives";
 import { count, money } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useI18n, useT, LANGS, type Lang } from "@/lib/i18n";
 
 /**
  * Ajustes de cuentas y mantenimiento.
@@ -13,16 +14,18 @@ import { cn } from "@/lib/utils";
  * maquinas que no son la del autor.
  */
 export function Settings() {
+  const t = useT();
   const { data: profiles, loading } = useAsyncData(() => api.profilesList(), []);
   const [rows, setRows] = useState<ProfileEntry[] | null>(null);
   const list = rows ?? profiles;
 
-  if (loading && !list) return <Empty>leyendo config dirs…</Empty>;
+  if (loading && !list) return <Empty>{t("reading config dirs…")}</Empty>;
 
   return (
     <div className="grid grid-cols-2 gap-3">
       <AccountsPanel rows={list ?? []} onChange={setRows} />
       <div className="space-y-3">
+        <LanguagePanel />
         <GuardPanel />
         <CleanupPanel />
       </div>
@@ -37,6 +40,7 @@ function AccountsPanel({
   rows: ProfileEntry[];
   onChange: (rows: ProfileEntry[]) => void;
 }) {
+  const t = useT();
   const [dir, setDir] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -63,14 +67,15 @@ function AccountsPanel({
   return (
     <Panel>
       <PanelHead
-        title="Cuentas"
-        right={<span className="text-[10px] text-ink-faint">{rows.length} config dirs</span>}
+        title={t("Accounts")}
+        right={<span className="text-[10px] text-ink-faint">{t("{n} config dirs", { n: rows.length })}</span>}
       />
       <div className="space-y-2 px-3.5 py-3">
         <p className="text-[11px] leading-snug text-ink-faint">
-          Se descubren solos los <code className="text-ink-dim">~/.claude*</code> que
-          tengan un <code className="text-ink-dim">projects/</code> adentro. Agrega
-          los que esten en otro lado y oculta los que no quieras medir.
+          {t(
+            "Any {glob} with a {sub} folder inside is found automatically. Add the ones that live elsewhere, and hide the ones you don't want measured.",
+            { glob: "~/.claude*", sub: "projects/" },
+          )}
         </p>
 
         {rows.map((p) => (
@@ -86,31 +91,31 @@ function AccountsPanel({
                 <span className="truncate text-[12px] font-medium">{p.name}</span>
                 <Badge tone={p.billing === "overage" ? "hot" : "neutral"}>
                   {p.billing === "overage"
-                    ? "overage"
+                    ? t("overage")
                     : p.billing === "flat"
-                      ? "tarifa plana"
-                      : "desconocida"}
+                      ? t("flat rate")
+                      : t("unknown")}
                 </Badge>
-                {p.discovered ? null : <Badge tone="neutral">manual</Badge>}
+                {p.discovered ? null : <Badge tone="neutral">{t("manual")}</Badge>}
               </span>
               <span className="flex shrink-0 gap-1">
                 <Button
                   disabled={busy}
                   onClick={() => void run(() => api.profileSetHidden(p.name, !p.hidden))}
                 >
-                  {p.hidden ? "Mostrar" : "Ocultar"}
+                  {p.hidden ? t("Show") : t("Hide account")}
                 </Button>
                 <Button
                   disabled={busy}
                   onClick={() => void run(() => api.profileForget(p.config_dir))}
-                  title="sacar de la lista — no borra datos, se puede deshacer"
+                  title={t("remove from the list — deletes no data, can be undone")}
                 >
-                  Quitar
+                  {t("Remove")}
                 </Button>
               </span>
             </div>
             <div className="mt-0.5 truncate text-[10px] text-ink-faint">
-              {p.config_dir} · {count(p.transcripts)} transcripts
+              {p.config_dir} · {t("{n} transcripts", { n: count(p.transcripts) })}
               {p.email ? ` · ${p.email}` : ""}
             </div>
           </div>
@@ -123,7 +128,7 @@ function AccountsPanel({
             onKeyDown={(e) => {
               if (e.key === "Enter" && dir.trim()) void run(() => api.profileAdd(dir));
             }}
-            placeholder="~/.claude-trabajo"
+            placeholder="~/.claude-work"
             className="min-w-0 flex-1 rounded border border-line bg-panel-2 px-2 py-1 text-[11px] text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint"
           />
           <Button
@@ -131,18 +136,19 @@ function AccountsPanel({
             disabled={busy || !dir.trim()}
             onClick={() => void run(() => api.profileAdd(dir))}
           >
-            Agregar
+            {t("Add")}
           </Button>
         </div>
         {error ? <p className="text-[10.5px] text-crit">{error}</p> : null}
         {ignored > 0 ? (
           <p className="flex items-center justify-between gap-2 text-[10.5px] text-ink-faint">
             <span>
-              {count(ignored)} config {ignored === 1 ? "dir quitado" : "dirs quitados"} del
-              escaneo
+              {ignored === 1
+                ? t("{n} config dir removed from discovery", { n: count(ignored) })
+                : t("{n} config dirs removed from discovery", { n: count(ignored) })}
             </span>
             <Button disabled={busy} onClick={() => void run(api.profilesRestore)}>
-              Restaurar
+              {t("Restore")}
             </Button>
           </p>
         ) : null}
@@ -151,10 +157,10 @@ function AccountsPanel({
   );
 }
 
-const GUARD_PERIODS: { id: string; label: string; hint: string }[] = [
-  { id: "daily", label: "diario", hint: "el techo del dia" },
-  { id: "weekly", label: "semanal", hint: "el techo de la semana" },
-  { id: "monthly", label: "mensual", hint: "el techo del mes" },
+const GUARD_PERIODS: { id: string; label: string }[] = [
+  { id: "daily", label: "daily" },
+  { id: "weekly", label: "weekly" },
+  { id: "monthly", label: "monthly" },
 ];
 
 /**
@@ -165,6 +171,7 @@ const GUARD_PERIODS: { id: string; label: string; hint: string }[] = [
  * bloqueado: tiene que haber una salida fuera del chat.
  */
 function GuardPanel() {
+  const t = useT();
   const { data: loaded } = useAsyncData(() => api.alertConfig(), []);
   const [cfg, setCfg] = useState<AlertConfig | null>(null);
   const current = cfg ?? loaded;
@@ -196,22 +203,22 @@ function GuardPanel() {
   return (
     <Panel>
       <PanelHead
-        title="Bloqueo"
+        title={t("Block")}
         right={
           <Button
             variant={current.guard_enabled ? "solid" : undefined}
             onClick={() => save({ ...current, guard_enabled: !current.guard_enabled })}
           >
-            {current.guard_enabled ? "Activo" : "Apagado"}
+            {current.guard_enabled ? t("Active") : t("Off")}
           </Button>
         }
       />
       <div className="space-y-2.5 px-3.5 py-3">
         <p className="text-[11px] leading-snug text-ink-faint">
-          Corta el turno antes de mandarlo cuando ya te pasaste. Es lo unico que{" "}
-          <span className="text-ink-dim">frena</span> en vez de avisar. Necesita el
-          hook <code className="text-ink-dim">budget-guard.sh</code> conectado en{" "}
-          <code className="text-ink-dim">settings.json</code> de la cuenta.
+          {t(
+            "Cuts the turn before it's sent once you're over. It's the only thing that stops you instead of warning you. Needs the {hook} hook wired into the account's {file}.",
+            { hook: "budget-guard.sh", file: "settings.json" },
+          )}
         </p>
 
         <div
@@ -221,7 +228,7 @@ function GuardPanel() {
           )}
         >
           <div className="text-[10px] uppercase tracking-wider text-ink-faint">
-            que techos hace cumplir
+            {t("which caps it enforces")}
           </div>
           {GUARD_PERIODS.map((p) => {
             const on = current.guard_periods.includes(p.id);
@@ -239,14 +246,14 @@ function GuardPanel() {
                 )}
               >
                 <span className="text-[11.5px]">
-                  {p.label}
+                  {t(p.label)}
                   <span className="text-ink-faint">
                     {" "}
-                    · {cap ? money(cap) : "sin techo definido"}
+                    · {cap ? money(cap) : t("no cap set")}
                   </span>
                 </span>
                 <span className={cn("text-[10px]", on ? "text-hot" : "text-ink-faint")}>
-                  {on ? "bloquea" : "no bloquea"}
+                  {on ? t("blocks") : t("doesn't block")}
                 </span>
               </button>
             );
@@ -254,7 +261,7 @@ function GuardPanel() {
         </div>
 
         <p className="text-[10px] leading-snug text-ink-faint">
-          Un techo sin monto definido no bloquea nunca, este tildado o no.
+          {t("A cap with no amount set never blocks, ticked or not.")}
         </p>
       </div>
     </Panel>
@@ -271,6 +278,7 @@ const CLEANUP_DAYS = [7, 30, 90];
  * esas ramas. Aun asi va en dos pasos, porque borra archivos.
  */
 function CleanupPanel() {
+  const t = useT();
   const [days, setDays] = useState(30);
   const [preview, setPreview] = useState<CleanupPreview | null>(null);
   const [done, setDone] = useState<CleanupPreview | null>(null);
@@ -299,21 +307,19 @@ function CleanupPanel() {
 
   return (
     <Panel>
-      <PanelHead title="Limpiar transcripts de subagente" />
+      <PanelHead title={t("Clean up subagent transcripts")} />
       <div className="space-y-2.5 px-3.5 py-3">
         <p className="text-[11px] leading-snug text-ink-faint">
-          Los subagentes dejan un <code className="text-ink-dim">.jsonl</code> por
-          agente en <code className="text-ink-dim">&lt;sesion&gt;/subagents/</code>, y
-          son lo que mas ocupa. Borrarlos{" "}
-          <span className="text-ink-dim">no cambia ningun numero</span>: los turnos ya
-          estan en la base. Lo unico que se pierde es poder hacer{" "}
-          <code className="text-ink-dim">--resume</code> de esas ramas.
+          {t(
+            "Subagents leave one {ext} per agent under {dir}, and they're the bulk of the disk use. Deleting them changes no numbers: the turns are already in the database. The only thing you lose is {resume} on those branches.",
+            { ext: ".jsonl", dir: "<session>/subagents/", resume: "--resume" },
+          )}
         </p>
 
         <div className="flex gap-1">
           {CLEANUP_DAYS.map((d) => (
             <Button key={d} disabled={busy} onClick={() => void look(d)}>
-              mas de {d} dias
+              {t("older than {n} days", { n: d })}
             </Button>
           ))}
         </div>
@@ -321,21 +327,23 @@ function CleanupPanel() {
         {preview ? (
           preview.files === 0 ? (
             <p className="text-[11px] text-ink-dim">
-              No hay nada mas viejo que {preview.older_than_days} dias.
+              {t("Nothing older than {n} days.", { n: preview.older_than_days })}
             </p>
           ) : (
             <div className="space-y-2 rounded border border-warn/40 bg-panel-2/50 px-2.5 py-2">
               <p className="text-[11.5px]">
-                <span className="num font-semibold">{count(preview.files)}</span> archivos ·{" "}
-                <span className="num font-semibold">{mb(preview.bytes)}</span> con mas de{" "}
-                {preview.older_than_days} dias.
+                {t("{f} files · {s} older than {n} days.", {
+                  f: count(preview.files),
+                  s: mb(preview.bytes),
+                  n: preview.older_than_days,
+                })}
               </p>
               <div className="flex gap-1.5">
                 <Button variant="solid" disabled={busy} onClick={() => void wipe()}>
-                  Borrar
+                  {t("Delete")}
                 </Button>
                 <Button disabled={busy} onClick={() => setPreview(null)}>
-                  Cancelar
+                  {t("Cancel")}
                 </Button>
               </div>
             </div>
@@ -344,7 +352,7 @@ function CleanupPanel() {
 
         {done ? (
           <p className="text-[11.5px] text-ok">
-            Borrados {count(done.files)} archivos · {mb(done.bytes)} liberados.
+            {t("Deleted {f} files · {s} freed.", { f: count(done.files), s: mb(done.bytes) })}
           </p>
         ) : null}
       </div>
@@ -355,4 +363,31 @@ function CleanupPanel() {
 function mb(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
   return `${Math.round(bytes / 1024 ** 2)} MB`;
+}
+
+/**
+ * Selector de idioma.
+ *
+ * El valor se guarda en la base y no en el navegador porque las alertas
+ * nativas las arma Rust: una notificacion en otro idioma que la ventana se
+ * lee como un bug.
+ */
+function LanguagePanel() {
+  const { lang, setLang, t } = useI18n();
+  return (
+    <Panel>
+      <PanelHead title={t("Language")} />
+      <div className="flex gap-1 px-3.5 py-3">
+        {LANGS.map((l) => (
+          <Button
+            key={l.id}
+            variant={lang === l.id ? "solid" : undefined}
+            onClick={() => setLang(l.id as Lang)}
+          >
+            {l.label}
+          </Button>
+        ))}
+      </div>
+    </Panel>
+  );
 }

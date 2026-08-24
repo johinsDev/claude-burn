@@ -5,6 +5,7 @@ import { Badge, Button, Empty, Panel, PanelHead } from "@/components/ui/primitiv
 import { useAsyncData } from "@/hooks/use-async-data";
 import { ago, money, tokens } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 const SEVERITY_TONE = {
   critical: "crit",
@@ -13,10 +14,10 @@ const SEVERITY_TONE = {
 } as const;
 
 const KIND_LABEL: Record<string, string> = {
-  budget: "presupuesto",
-  context: "contexto",
-  plan_limit: "limite del plan",
-  expensive_model: "modelo caro",
+  budget: "budget",
+  context: "alert:context",
+  plan_limit: "plan limit",
+  expensive_model: "expensive model",
 };
 
 export function Alerts() {
@@ -39,6 +40,7 @@ export function Alerts() {
 }
 
 function AlertSettings({ initial }: { initial: AlertConfig }) {
+  const t = useT();
   const [cfg, setCfg] = useState(initial);
   const [saved, setSaved] = useState(false);
 
@@ -54,21 +56,23 @@ function AlertSettings({ initial }: { initial: AlertConfig }) {
     <div className="space-y-3">
         <Panel>
           <PanelHead
-            title="Presupuesto"
+            title={t("Budget")}
             right={
-              saved ? <span className="text-[10px] text-ok">guardado</span> : null
+              saved ? <span className="text-[10px] text-ok">{t("saved")}</span> : null
             }
           />
           <div className="space-y-3 px-3.5 py-3">
             <p className="text-[11px] leading-snug text-ink-dim">
-              Solo cuenta el gasto de cuentas con overage — la plata que
-              realmente se factura. Avisa al {cfg.budget_steps.join(", ")}%.
+              {t(
+                "Only counts spend from overage accounts — the money actually billed. Warns at {steps}%.",
+                { steps: cfg.budget_steps.join(", ") },
+              )}
             </p>
             {(
               [
-                ["budget_daily_usd", "por dia"],
-                ["budget_weekly_usd", "por semana"],
-                ["budget_monthly_usd", "por mes"],
+                ["budget_daily_usd", "per day"],
+                ["budget_weekly_usd", "per week"],
+                ["budget_monthly_usd", "per month"],
               ] as const
             ).map(([key, label]) => (
               <Field key={key} label={label}>
@@ -85,26 +89,26 @@ function AlertSettings({ initial }: { initial: AlertConfig }) {
         </Panel>
 
         <Panel>
-          <PanelHead title="Contexto inflado" />
+          <PanelHead title={t("Context bloat")} />
           <div className="space-y-3 px-3.5 py-3">
             <p className="text-[11px] leading-snug text-ink-dim">
-              Avisa cuando una sesion viva pasa estos tamanos. Es la alerta que
-              ataca el 67% del gasto: pasado cierto punto, casi todo el costo
-              del turno es releer lo mismo.
+              {t(
+                "Warns when a live session passes these sizes. This is the alert that goes after 67% of the spend: past a certain point, almost all of a turn's cost is re-reading the same thing.",
+              )}
             </p>
-            <Field label={`aviso · ${tokens(cfg.context_warn_tokens)}`}>
+            <Field label={`${t("warn")} · ${tokens(cfg.context_warn_tokens)}`}>
               <TokenSlider
                 value={cfg.context_warn_tokens}
                 onCommit={(v) => void update({ context_warn_tokens: v })}
               />
             </Field>
-            <Field label={`critico · ${tokens(cfg.context_critical_tokens)}`}>
+            <Field label={`${t("critical")} · ${tokens(cfg.context_critical_tokens)}`}>
               <TokenSlider
                 value={cfg.context_critical_tokens}
                 onCommit={(v) => void update({ context_critical_tokens: v })}
               />
             </Field>
-            <Field label={`no repetir antes de ${cfg.cooldown_minutes} min`}>
+            <Field label={t("don't repeat within {n} min", { n: cfg.cooldown_minutes })}>
               <input
                 type="range"
                 min={5}
@@ -122,6 +126,7 @@ function AlertSettings({ initial }: { initial: AlertConfig }) {
 }
 
 function StartupPanel() {
+  const t = useT();
   const { data: enabled, reload } = useAsyncData(() => isEnabled(), []);
 
   const toggle = async () => {
@@ -132,17 +137,17 @@ function StartupPanel() {
   return (
     <Panel>
       <PanelHead
-        title="Arranque"
+        title={t("Startup")}
         right={
           <Button variant="solid" onClick={() => void toggle()}>
-            {enabled ? "Desactivar" : "Activar"}
+            {enabled ? t("Disable") : t("Enable")}
           </Button>
         }
       />
       <p className="px-3.5 py-3 text-[11px] leading-snug text-ink-dim">
         {enabled
-          ? "Arranca con el sistema. El medidor cuenta desde el primer turno del dia."
-          : "No arranca solo. Si la app esta cerrada no hay alertas: las de contexto solo sirven mientras la sesion sigue abierta."}
+          ? t("Starts with the system. The meter counts from the first turn of the day.")
+          : t("Won't start on its own. With the app closed there are no alerts — context ones only matter while the session is still open.")}
       </p>
     </Panel>
   );
@@ -155,16 +160,16 @@ function FiredList({
   fired: FiredAlert[] | null;
   onReload: () => void;
 }) {
+  const t = useT();
   return (
     <Panel className="overflow-hidden">
       <PanelHead
-        title={`Alertas disparadas${fired?.length ? ` · ${fired.length}` : ""}`}
-        right={<Button onClick={onReload}>Actualizar</Button>}
+        title={`${t("Alerts fired")}${fired?.length ? ` · ${fired.length}` : ""}`}
+        right={<Button onClick={onReload}>{t("Refresh")}</Button>}
       />
       {!fired || fired.length === 0 ? (
         <Empty>
-          Todavia no se disparo ninguna. Es buena senal — o el presupuesto
-          todavia no esta configurado.
+          {t("None fired yet. Good sign — or the budget isn't set up.")}
         </Empty>
       ) : (
         <ul className="max-h-[calc(100vh-190px)] divide-y divide-line/60 overflow-y-auto">
@@ -178,6 +183,7 @@ function FiredList({
 }
 
 function AlertRow({ fired }: { fired: FiredAlert }) {
+  const t = useT();
   const { alert } = fired;
   const tone = SEVERITY_TONE[alert.severity] ?? "neutral";
   // El titulo trae el nombre de la sesion, que no alcanza para ubicarla: hay
@@ -189,7 +195,7 @@ function AlertRow({ fired }: { fired: FiredAlert }) {
     <li className="px-3.5 py-2.5">
       <div className="flex items-start justify-between gap-2">
         <span className="text-[12px] font-medium">{alert.title}</span>
-        <Badge tone={tone}>{KIND_LABEL[fired.kind] ?? fired.kind}</Badge>
+        <Badge tone={tone}>{t(KIND_LABEL[fired.kind] ?? fired.kind)}</Badge>
       </div>
       {origin ? (
         <p className="mt-0.5 truncate text-[10.5px] text-ink-dim">{origin}</p>
@@ -226,6 +232,7 @@ function MoneyInput({
   value: number | null;
   onCommit: (v: number | null) => void;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState(value === null ? "" : String(value));
 
   const commit = () => {
@@ -242,7 +249,7 @@ function MoneyInput({
         <input
           value={draft}
           inputMode="decimal"
-          placeholder="sin limite"
+          placeholder={t("no limit")}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => e.key === "Enter" && commit()}

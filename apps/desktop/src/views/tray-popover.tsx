@@ -6,6 +6,7 @@ import { useAsyncData, useInterval } from "@/hooks/use-async-data";
 import { Badge, Button, Meter } from "@/components/ui/primitives";
 import { ago, limitTone, money, pct, resetState, toneClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 /**
  * El popover de la barra de menu. Responde tres preguntas en un vistazo:
@@ -13,6 +14,7 @@ import { cn } from "@/lib/utils";
  * se esta inflando.
  */
 export function TrayPopover() {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const { data, reload } = useAsyncData(() => api.overview(), []);
 
@@ -37,7 +39,7 @@ export function TrayPopover() {
   if (!data) {
     return (
       <div className="popover-root flex items-center justify-center text-ink-faint">
-        leyendo transcripts…
+        {t("reading transcripts…")}
       </div>
     );
   }
@@ -67,13 +69,13 @@ export function TrayPopover() {
         </div>
         <div className="flex items-center gap-1">
           <Button onClick={() => void refresh()} disabled={busy}>
-            {busy ? "…" : "Actualizar"}
+            {busy ? "…" : t("Refresh")}
           </Button>
           <Button
             variant="solid"
             onClick={() => void invoke("show_main_window")}
           >
-            Abrir
+            {t("Open")}
           </Button>
         </div>
       </header>
@@ -81,37 +83,38 @@ export function TrayPopover() {
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
         {theoretical > 0.005 ? (
           <p className="text-[10.5px] leading-snug text-ink-faint">
-            + {money(theoretical)} de consumo en cuentas de tarifa plana — valor
-            de API, no se factura
+            {t("+ {v} consumed on flat-rate accounts — API value, not billed", {
+              v: money(theoretical),
+            })}
           </p>
         ) : null}
 
         {data.month.scoped_flat_account ? null : (
           <div className="space-y-2 rounded border border-line bg-panel-2/40 p-2">
             <PopoverMeter
-              label="Hoy"
+              label={t("Today")}
               spent={data.month.today.spent_usd}
               budget={data.month.today.budget_usd}
             />
             <PopoverMeter
-              label="Semana"
+              label={t("Week")}
               spent={data.month.week.spent_usd}
               budget={data.month.week.budget_usd}
               foot={data.month.week.elapsed_label}
             />
             <PopoverMeter
-              label="Mes"
+              label={t("Month")}
               spent={data.month.spent_usd}
               budget={data.month.budget_usd}
-              foot={`dia ${data.month.day} de ${data.month.days_in_month}`}
+              foot={t("day {d} of {n}", { d: data.month.day, n: data.month.days_in_month })}
             />
           </div>
         )}
 
         {limits.length > 0 ? (
-          <Section title="Limites del plan">
+          <Section title={t("Plan limits")}>
             {limits.map((l) => {
-              const reset = resetState(l.resets_at);
+              const reset = resetState(l.resets_at, t);
               // Un limite ya reiniciado muestra un porcentaje muerto: se
               // atenua para que no se lea como consumo de ahora.
               const tone = reset.stale ? "ok" : limitTone(l.percent);
@@ -131,7 +134,7 @@ export function TrayPopover() {
                   <Meter value={reset.stale ? 0 : l.percent} tone={tone} />
                   <div className="flex justify-between text-[10px] text-ink-faint">
                     <span>{reset.label}</span>
-                    <span>{ago(l.fetched)}</span>
+                    <span>{ago(l.fetched, t)}</span>
                   </div>
                 </div>
               );
@@ -140,17 +143,17 @@ export function TrayPopover() {
         ) : null}
 
         <Section
-          title={`Sesiones vivas${live.length ? ` · ${live.length}` : ""}`}
+          title={`${t("Live sessions")}${live.length ? ` · ${live.length}` : ""}`}
         >
           {live.length === 0 ? (
-            <p className="text-[11px] text-ink-faint">Ninguna corriendo ahora.</p>
+            <p className="text-[11px] text-ink-faint">{t("None running right now.")}</p>
           ) : (
             live.map((s) => <LiveRow key={s.pid} session={s} />)
           )}
         </Section>
 
         {total > 0 ? (
-          <Section title="En que se va la plata">
+          <Section title={t("Where the money goes")}>
             <div className="flex h-2 w-full overflow-hidden rounded-full">
               {comp.map((r) => (
                 <div
@@ -164,7 +167,7 @@ export function TrayPopover() {
               <span className={cn("num font-semibold", cacheShare > 0.5 ? "text-crit" : "")}>
                 {pct(data.composition.cache_read, total)}
               </span>{" "}
-              es releer contexto, no trabajo nuevo.
+              {t("is re-reading context, not new work.")}
             </p>
           </Section>
         ) : null}
@@ -195,11 +198,12 @@ function LiveRow({
     account: string;
   };
 }) {
+  const t = useT();
   return (
     <button
       type="button"
       onClick={() => void api.openSession(session.session_id)}
-      title="abrir el detalle de esta sesion"
+      title={t("open this session's detail")}
       className="w-full rounded-md border border-line bg-panel-2/60 px-2.5 py-2 text-left transition-colors hover:border-ink-faint hover:bg-panel-2"
     >
       <div className="flex items-center justify-between gap-2">
@@ -221,9 +225,9 @@ function LiveRow({
 function limitLabel(kind: string): string {
   switch (kind) {
     case "session":
-      return "sesion (5 h)";
+      return "session (5 h)";
     case "weekly_all":
-      return "semanal";
+      return "weekly";
     case "weekly_scoped":
       return "semanal por modelo";
     default:
@@ -247,6 +251,7 @@ function PopoverMeter({
   budget: number | null;
   foot?: string;
 }) {
+  const t = useT();
   if (!budget) {
     return (
       <div className="flex items-baseline justify-between gap-2">
@@ -262,7 +267,7 @@ function PopoverMeter({
     <div className="space-y-1">
       <div className="flex items-baseline justify-between gap-2">
         <span className="truncate text-[11px] text-ink-dim">
-          {label} · techo {money(budget)}
+          {label} · {t("cap {v}", { v: money(budget) })}
         </span>
         <span className={cn("num text-[11px] font-semibold", toneClass[tone])}>
           {(share * 100).toFixed(0)}%
@@ -270,9 +275,9 @@ function PopoverMeter({
       </div>
       <Meter value={Math.min(share * 100, 100)} tone={tone} />
       <div className="flex justify-between text-[10px] text-ink-faint">
-        <span>{money(spent)} facturado</span>
+        <span>{t("{v} billed", { v: money(spent) })}</span>
         <span className={cn(left < 0 && toneClass.crit)}>
-          {left >= 0 ? `${money(left)} libres` : `${money(-left)} pasado`}
+          {left >= 0 ? t("{v} free", { v: money(left) }) : t("{v} over", { v: money(-left) })}
           {foot ? ` · ${foot}` : ""}
         </span>
       </div>

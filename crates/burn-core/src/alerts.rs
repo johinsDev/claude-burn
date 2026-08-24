@@ -52,6 +52,40 @@ pub struct Alert {
     pub session_id: Option<String>,
 }
 
+/// Idioma de los textos de alerta.
+///
+/// Solo son cuatro mensajes, asi que un `match` es mas claro y mas barato que
+/// arrastrar una dependencia de i18n al motor de costos.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Lang {
+    #[default]
+    En,
+    Es,
+}
+
+impl AlertConfig {
+    fn lang(&self) -> Lang {
+        Lang::parse(&self.lang)
+    }
+}
+
+impl Lang {
+    pub fn parse(raw: &str) -> Self {
+        if raw == "es" {
+            Self::Es
+        } else {
+            Self::En
+        }
+    }
+    fn es(self) -> bool {
+        self == Self::Es
+    }
+}
+
+fn default_lang() -> String {
+    "en".to_string()
+}
+
 fn yes() -> bool {
     true
 }
@@ -76,6 +110,9 @@ pub struct AlertConfig {
     /// bloqueo tambien se come el mensaje que pediria desbloquearlo.
     #[serde(default = "yes")]
     pub guard_enabled: bool,
+    /// Idioma de los textos de alerta: `en` o `es`.
+    #[serde(default = "default_lang")]
+    pub lang: String,
     /// Que techos hace cumplir el bloqueo: `daily`, `weekly`, `monthly`.
     #[serde(default = "default_guard_periods")]
     pub guard_periods: Vec<String>,
@@ -96,6 +133,7 @@ impl Default for AlertConfig {
             budget_weekly_usd: None,
             budget_monthly_usd: None,
             budget_steps: vec![50, 75, 90, 100],
+            lang: default_lang(),
             guard_enabled: true,
             guard_periods: default_guard_periods(),
             limit_steps: vec![75, 90],
@@ -157,10 +195,26 @@ pub fn evaluate(snap: &Snapshot, cfg: &AlertConfig) -> Vec<Alert> {
 }
 
 fn budget_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Alert>) {
+    let lang = cfg.lang();
     let periods: [(&str, &str, Option<f64>, f64); 3] = [
-        ("dia", "daily", cfg.budget_daily_usd, snap.today_usd),
-        ("semana", "weekly", cfg.budget_weekly_usd, snap.week_usd),
-        ("mes", "monthly", cfg.budget_monthly_usd, snap.month_usd),
+        (
+            if lang.es() { "dia" } else { "day" },
+            "daily",
+            cfg.budget_daily_usd,
+            snap.today_usd,
+        ),
+        (
+            if lang.es() { "semana" } else { "week" },
+            "weekly",
+            cfg.budget_weekly_usd,
+            snap.week_usd,
+        ),
+        (
+            if lang.es() { "mes" } else { "month" },
+            "monthly",
+            cfg.budget_monthly_usd,
+            snap.month_usd,
+        ),
     ];
     for (label, id, limit, spent) in periods {
         let Some(limit) = limit.filter(|l| *l > 0.0) else {
@@ -176,18 +230,24 @@ fn budget_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Alert>) {
             session_id: None,
             kind: AlertKind::Budget,
             key: format!("{id}:{step}"),
-            title: if step >= 100 {
-                format!("Presupuesto del {label} agotado")
-            } else {
-                format!("{step}% del presupuesto del {label}")
+            title: match (step >= 100, lang.es()) {
+                (true, true) => format!("Presupuesto del {label} agotado"),
+                (true, false) => format!("Budget for the {label} is spent"),
+                (false, true) => format!("{step}% del presupuesto del {label}"),
+                (false, false) => format!("{step}% of the {label} budget"),
             },
-            body: format!("${spent:.2} de ${limit:.2}"),
+            body: if lang.es() {
+                format!("${spent:.2} de ${limit:.2}")
+            } else {
+                format!("${spent:.2} of ${limit:.2}")
+            },
             severity: severity_for(pct),
         });
     }
 }
 
 fn context_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Alert>) {
+    let lang = cfg.lang();
     for (session, ctx) in &snap.live {
         let (severity, threshold) = if *ctx >= cfg.context_critical_tokens {
             (Severity::Critical, cfg.context_critical_tokens)
@@ -210,18 +270,31 @@ fn context_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Alert>) {
             session_id: Some(session.session_id.clone()),
             kind: AlertKind::Context,
             key: format!("{}:{}", session.session_id, threshold),
-            title: format!("Contexto inflado en {name}"),
-            body: format!(
-                "{} · {} de contexto. A este tamano casi todo el costo del turno es releer lo mismo: /compact o sesion nueva.",
-                session.account,
-                fmt_tokens(*ctx)
-            ),
+            title: if lang.es() {
+                format!("Contexto inflado en {name}")
+            } else {
+                format!("Context bloat in {name}")
+            },
+            body: if lang.es() {
+                format!(
+                    "{} · {} de contexto. A este tamano casi todo el costo del turno es releer lo mismo: /compact o sesion nueva.",
+                    session.account,
+                    fmt_tokens(*ctx)
+                )
+            } else {
+                format!(
+                    "{} · {} of context. At this size almost all of a turn's cost is re-reading the same thing: /compact or start fresh.",
+                    session.account,
+                    fmt_tokens(*ctx)
+                )
+            },
             severity,
         });
     }
 }
 
 fn plan_limit_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Alert>) {
+    let lang = cfg.lang();
     for (account, _billing, usage) in &snap.plans {
         for l in &usage.limits {
             // Un limite inactivo ya se reinicio: su porcentaje esta congelado
@@ -232,11 +305,14 @@ fn plan_limit_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Alert>) {
             let Some(step) = step_reached(l.percent, &cfg.limit_steps) else {
                 continue;
             };
-            let window = match l.kind.as_str() {
-                "session" => "de 5 horas",
-                "weekly_all" => "semanal",
-                "weekly_scoped" => "semanal del modelo",
-                other => other,
+            let window = match (l.kind.as_str(), lang.es()) {
+                ("session", true) => "de 5 horas",
+                ("session", false) => "5-hour",
+                ("weekly_all", true) => "semanal",
+                ("weekly_all", false) => "weekly",
+                ("weekly_scoped", true) => "semanal del modelo",
+                ("weekly_scoped", false) => "weekly model",
+                (other, _) => other,
             };
             out.push(Alert {
                 account: Some(account.clone()),
@@ -244,10 +320,15 @@ fn plan_limit_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Alert>) {
                 session_id: None,
                 kind: AlertKind::PlanLimit,
                 key: format!("{account}:{}:{step}", l.kind),
-                title: format!("{}% del limite {window} en {account}", l.percent.round()),
-                body: match &l.resets_at {
-                    Some(r) => format!("reinicia {r}"),
-                    None => String::new(),
+                title: if lang.es() {
+                    format!("{}% del limite {window} en {account}", l.percent.round())
+                } else {
+                    format!("{}% of the {window} limit on {account}", l.percent.round())
+                },
+                body: match (&l.resets_at, lang.es()) {
+                    (Some(r), true) => format!("reinicia {r}"),
+                    (Some(r), false) => format!("resets {r}"),
+                    (None, _) => String::new(),
                 },
                 severity: severity_for(l.percent),
             });
@@ -260,6 +341,7 @@ fn plan_limit_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Alert>) {
 /// "Caro" no es una lista fija: es cualquier modelo cuyo precio de salida
 /// supere al de la familia Opus, que se lee de la misma tabla de precios.
 fn expensive_model_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Alert>) {
+    let lang = cfg.lang();
     let baseline = pricing::table()
         .models
         .iter()
@@ -290,10 +372,20 @@ fn expensive_model_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Aler
             session_id: None,
             kind: AlertKind::ExpensiveModel,
             key: format!("{model}:{}", (share * 10.0) as u32),
-            title: format!("{} se lleva el {:.0}% de hoy", rate.label, share * 100.0),
-            body: format!(
-                "${cost:.0} de ${total:.0}. Cuesta {factor:.0}x lo que Opus 5 por token: en tareas que no lo necesiten, cambiar de modelo corta esa linea."
-            ),
+            title: if lang.es() {
+                format!("{} se lleva el {:.0}% de hoy", rate.label, share * 100.0)
+            } else {
+                format!("{} is taking {:.0}% of today", rate.label, share * 100.0)
+            },
+            body: if lang.es() {
+                format!(
+                    "${cost:.0} de ${total:.0}. Cuesta {factor:.0}x lo que Opus 5 por token: en tareas que no lo necesiten, cambiar de modelo corta esa linea."
+                )
+            } else {
+                format!(
+                    "${cost:.0} of ${total:.0}. It costs {factor:.0}x what Opus 5 does per token — switching model on work that doesn't need it halves this line."
+                )
+            },
             severity: Severity::Warn,
         });
     }
@@ -303,6 +395,27 @@ fn expensive_model_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Aler
 mod tests {
     /// Una config guardada antes de que existiera el bloqueo no debe romper
     /// la deserializacion ni quedar con el guard apagado por accidente.
+    #[test]
+    fn los_textos_de_alerta_siguen_el_idioma() {
+        let mut cfg = super::AlertConfig {
+            budget_daily_usd: Some(100.0),
+            ..Default::default()
+        };
+        let snap = super::Snapshot {
+            today_usd: 96.0,
+            ..snap()
+        };
+        // Ingles por defecto, sin configurar nada.
+        let en = super::evaluate(&snap, &cfg);
+        assert!(en[0].title.contains("budget"), "{}", en[0].title);
+        assert!(en[0].body.contains(" of $"), "{}", en[0].body);
+
+        cfg.lang = "es".into();
+        let es = super::evaluate(&snap, &cfg);
+        assert!(es[0].title.contains("presupuesto"), "{}", es[0].title);
+        assert!(es[0].body.contains(" de $"), "{}", es[0].body);
+    }
+
     #[test]
     fn config_vieja_estrena_el_guard_prendido() {
         let raw = r#"{"budget_daily_usd":33.0,"budget_weekly_usd":null,

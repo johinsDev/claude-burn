@@ -72,16 +72,25 @@ export const toneBg: Record<string, string> = {
   crit: "bg-crit",
 };
 
-/** "hace 3 min" a partir de un epoch en ms. */
-export function ago(ms: number | null | undefined): string {
-  if (!ms) return "sin dato";
+/**
+ * "3 min ago" a partir de un epoch en ms.
+ *
+ * Recibe `t` en vez de importarlo: `format.ts` no es un componente y no puede
+ * usar el hook, y pasar el traductor es mas barato que volverlo un contexto.
+ */
+export function ago(ms: number | null | undefined, t: Translate = identity): string {
+  if (!ms) return t("no data");
   const min = Math.floor((Date.now() - ms) / 60_000);
-  if (min < 1) return "recien";
-  if (min < 60) return `hace ${min} min`;
+  if (min < 1) return t("just now");
+  if (min < 60) return t("{n} min ago", { n: min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `hace ${h} h`;
-  return `hace ${Math.floor(h / 24)} d`;
+  if (h < 24) return t("{n} h ago", { n: h });
+  return t("{n} d ago", { n: Math.floor(h / 24) });
 }
+
+/** La firma de `t` de i18n, sin importar el modulo y crear un ciclo. */
+export type Translate = (text: string, vars?: Record<string, string | number>) => string;
+const identity: Translate = (text) => text;
 
 /**
  * Estado de un limite del plan segun su fecha de reinicio.
@@ -90,21 +99,21 @@ export function ago(ms: number | null | undefined): string {
  * reinicio: no es tu consumo actual sino un numero muerto. Decirlo importa —
  * mostrar "15%" sin aclararlo hace creer que es el dato de hoy.
  */
-export function resetState(iso: string | null | undefined): {
-  stale: boolean;
-  label: string;
-} {
+export function resetState(
+  iso: string | null | undefined,
+  t: Translate = identity,
+): { stale: boolean; label: string } {
   if (!iso) return { stale: false, label: "" };
   const diff = new Date(iso).getTime() - Date.now();
   if (diff <= 0) {
-    return { stale: true, label: "ya reinicio · dato viejo" };
+    return { stale: true, label: t("already reset · stale") };
   }
   const h = Math.floor(diff / 3_600_000);
   const m = Math.floor((diff % 3_600_000) / 60_000);
-  if (h >= 24) return { stale: false, label: `reinicia en ${Math.floor(h / 24)} d` };
+  if (h >= 24) return { stale: false, label: t("resets in {n} d", { n: Math.floor(h / 24) }) };
   return {
     stale: false,
-    label: h > 0 ? `reinicia en ${h} h ${m} min` : `reinicia en ${m} min`,
+    label: h > 0 ? t("resets in {h} h {m} min", { h, m }) : t("resets in {m} min", { m }),
   };
 }
 

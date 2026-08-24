@@ -13,17 +13,18 @@ import {
   toneClass,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import { SessionDetail } from "@/views/session-detail";
 import { useAsyncData, useLatest } from "@/hooks/use-async-data";
 
 type SortKey = "cost_usd" | "cost_per_turn" | "max_ctx" | "turns" | "last_ts";
 
 const COLUMNS: { key: SortKey; label: string; width: string }[] = [
-  { key: "cost_usd", label: "costo", width: "w-20" },
-  { key: "cost_per_turn", label: "$/turno", width: "w-20" },
-  { key: "turns", label: "turnos", width: "w-16" },
+  { key: "cost_usd", label: "cost", width: "w-20" },
+  { key: "cost_per_turn", label: "$/turn", width: "w-20" },
+  { key: "turns", label: "turns", width: "w-16" },
   { key: "max_ctx", label: "ctx max", width: "w-20" },
-  { key: "last_ts", label: "fecha", width: "w-24" },
+  { key: "last_ts", label: "date", width: "w-24" },
 ];
 
 export function Sessions({
@@ -36,6 +37,7 @@ export function Sessions({
   focusSessionId?: string | null;
   onFocusHandled?: () => void;
 }) {
+  const t = useT();
   const [sort, setSort] = useState<SortKey>("cost_usd");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<SessionRow | null>(null);
@@ -81,28 +83,27 @@ export function Sessions({
 
   const hasFlatRate = visible.some((r) => !r.is_billable);
 
-  if (loading) return <Empty>cargando sesiones…</Empty>;
+  if (loading) return <Empty>{t("loading sessions…")}</Empty>;
 
   return (
     <>
       <Panel className="overflow-hidden">
         <PanelHead
-          title={`${visible.length} sesiones`}
+          title={t("{n} sessions", { n: visible.length })}
           right={
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="buscar por titulo o proyecto…"
+              placeholder={t("search by title or project…")}
               className="w-56 rounded border border-line bg-panel-2 px-2 py-1 text-[11px] text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint"
             />
           }
         />
         {hasFlatRate ? (
           <p className="border-b border-line bg-panel-2/40 px-3.5 py-2 text-[10.5px] leading-snug text-ink-faint">
-            Los costos con <span className="text-ink-dim">≈</span> son de cuentas
-            de tarifa plana: es el valor de API que consumiste, no plata que te
-            cobran. Sirve para comparar sesiones entre si — y porque el mismo
-            habito en una cuenta con overage si se factura.
+            {t(
+              "Costs marked ≈ come from flat-rate accounts: it's the API value you consumed, not money you're charged. Useful for comparing sessions against each other — and because the same habit on an overage account does get billed.",
+            )}
           </p>
         ) : null}
         <div className="max-h-[calc(100vh-190px)] overflow-y-auto">
@@ -121,13 +122,13 @@ export function Sessions({
                         sort === c.key && "text-ink",
                       )}
                     >
-                      {c.label}
+                      {t(c.label)}
                       {sort === c.key ? " ↓" : ""}
                     </button>
                   </th>
                 ))}
-                <th className="px-2 py-2 text-left font-medium">sesion</th>
-                <th className="px-2 py-2 text-left font-medium">modelos</th>
+                <th className="px-2 py-2 text-left font-medium">{t("session")}</th>
+                <th className="px-2 py-2 text-left font-medium">{t("models")}</th>
               </tr>
             </thead>
             <tbody>
@@ -146,8 +147,8 @@ export function Sessions({
                       )}
                       title={
                         r.is_billable
-                          ? "facturado como overage"
-                          : "consumo a precio de API — esta cuenta es de tarifa plana"
+                          ? t("billed as overage")
+                          : t("API-priced consumption — this account is flat rate")
                       }
                     >
                       {r.is_billable ? "" : "≈"}
@@ -174,13 +175,13 @@ export function Sessions({
                           </Badge>
                         ))}
                         {r.compactions > 0 ? (
-                          <Badge tone="ok">{r.compactions} compact</Badge>
+                          <Badge tone="ok">{t("{n} compact", { n: r.compactions })}</Badge>
                         ) : null}
                         {r.agents > 0 ? (
                           <Badge
                             tone={r.agent_usd / (r.cost_usd || 1) > 0.2 ? "warn" : "neutral"}
                           >
-                            {r.agents} sub · {money(r.agent_usd)}
+                            {t("{n} sub", { n: r.agents })} · {money(r.agent_usd)}
                           </Badge>
                         ) : null}
                       </div>
@@ -205,6 +206,7 @@ export function Sessions({
  * abajo. El titulo es lo que permite reconocerla; el proyecto solo, no.
  */
 function SessionLabel({ row }: { row: SessionRow }) {
+  const t = useT();
   const { text, kind } = sessionTitle(row);
   return (
     <div className="min-w-0">
@@ -216,7 +218,7 @@ function SessionLabel({ row }: { row: SessionRow }) {
       </div>
       <div className="truncate text-[10px] text-ink-faint">
         {row.account} · {projectName(row.project)}
-        {kind === "prompt" ? " · sin titulo, muestro el primer prompt" : ""}
+        {kind === "prompt" ? ` · ${t("no title, showing the first prompt")}` : ""}
       </div>
     </div>
   );

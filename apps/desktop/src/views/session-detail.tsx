@@ -23,6 +23,7 @@ import {
   toneClass,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 /**
  * El grafico que contesta la pregunta original: donde se dio garra esta sesion.
@@ -38,6 +39,7 @@ export function SessionDetail({
   session: SessionRow;
   onClose: () => void;
 }) {
+  const t = useT();
   const { data: points, loading } = useAsyncData(
     () => api.sessionTimeline(session.session_id),
     [session.session_id],
@@ -119,25 +121,25 @@ export function SessionDetail({
             </p>
             {label.kind === "title" && session.prompt ? (
               <p className="mt-1.5 line-clamp-2 max-w-2xl text-[11px] leading-snug text-ink-dim">
-                <span className="text-ink-faint">arranco con:</span> {session.prompt}
+                <span className="text-ink-faint">{t("started with:")}</span> {session.prompt}
               </p>
             ) : null}
           </div>
-          <Button onClick={onClose}>Cerrar · esc</Button>
+          <Button onClick={onClose}>{t("Close · esc")}</Button>
         </header>
 
         <div className="grid grid-cols-5 divide-x divide-line border-b border-line">
-          <Stat label="Costo" value={money(session.cost_usd)} />
-          <Stat label="$ por turno" value={money(session.cost_per_turn)} />
-          <Stat label="Turnos" value={count(session.turns)} />
+          <Stat label={t("Cost")} value={money(session.cost_usd)} />
+          <Stat label={t("$ per turn")} value={money(session.cost_per_turn)} />
+          <Stat label={t("Turns")} value={count(session.turns)} />
           <Stat
-            label="Contexto max"
+            label={t("Max context")}
             value={tokens(session.max_ctx)}
             tone={toneClass[tone]}
             sub={`promedio ${tokens(session.avg_ctx)}`}
           />
           <Stat
-            label="Compactaciones"
+            label={t("Compactions")}
             value={session.compactions}
             tone={session.compactions === 0 ? "text-crit" : undefined}
             sub={session.compactions === 0 ? "nunca se limpio" : undefined}
@@ -147,26 +149,30 @@ export function SessionDetail({
         {perTurn ? (
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-line px-5 py-2.5 text-[11px]">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
-              turno promedio
+              {t("average turn")}
             </span>
             <span className="text-ink-dim">
-              lee{" "}
+              {t("reads")}{" "}
               <span className="num font-semibold text-crit">{tokens(perTurn.readTok)}</span>{" "}
               → {money(perTurn.readCost)}
             </span>
             <span className="text-ink-dim">
-              escribe{" "}
+              {t("writes")}{" "}
               <span className="num font-semibold text-ok">{tokens(perTurn.outTok)}</span> →{" "}
               {money(perTurn.outCost)}
             </span>
             {perTurn.ratio > 1 ? (
               <span className={cn(perTurn.ratio > 100 ? toneClass.crit : "text-ink-dim")}>
-                lee {Math.round(perTurn.ratio)}× lo que escribe
+                {t("reads {n}× what it writes", { n: Math.round(perTurn.ratio) })}
               </span>
             ) : null}
             {perTurn.agents > 0 ? (
               <span className="ml-auto text-ink-faint">
-                {perTurn.agents} subagentes · {perTurn.agentTurns} de {points?.length} turnos
+                {t("{a} subagents · {n} of {total} turns", {
+                  a: perTurn.agents,
+                  n: perTurn.agentTurns,
+                  total: points?.length ?? 0,
+                })}
               </span>
             ) : null}
           </div>
@@ -175,7 +181,7 @@ export function SessionDetail({
         {loading ? (
           <Empty>cargando turnos…</Empty>
         ) : !points || points.length === 0 ? (
-          <Empty>sin turnos registrados</Empty>
+          <Empty>{t("no turns recorded")}</Empty>
         ) : (
           <>
             <div className="px-2 pt-3">
@@ -226,7 +232,7 @@ export function SessionDetail({
                   />
                   <Tooltip
                     {...tooltipStyle}
-                    labelFormatter={(v) => `turno ${v}`}
+                    labelFormatter={(v) => t("turn {n}", { n: String(v) })}
                     formatter={fmt((v, name) =>
                       name === "ctx" ? [tokens(v), "contexto"] : [money(v), "costo"],
                     )}

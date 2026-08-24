@@ -15,13 +15,14 @@ const Models = lazy(() => import("@/views/models").then((m) => ({ default: m.Mod
 const Alerts = lazy(() => import("@/views/alerts").then((m) => ({ default: m.Alerts })));
 const Settings = lazy(() => import("@/views/settings").then((m) => ({ default: m.Settings })));
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 const TABS = [
-  { id: "overview", label: "Resumen" },
-  { id: "sessions", label: "Sesiones" },
-  { id: "models", label: "Modelos" },
-  { id: "alerts", label: "Alertas" },
-  { id: "settings", label: "Ajustes" },
+  { id: "overview", label: "Overview" },
+  { id: "sessions", label: "Sessions" },
+  { id: "models", label: "Models" },
+  { id: "alerts", label: "Alerts" },
+  { id: "settings", label: "Settings" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["id"];
@@ -33,6 +34,7 @@ export function App() {
 }
 
 function MainWindow() {
+  const tr = useT();
   const [tab, setTab] = useState<Tab>("overview");
   const [busy, setBusy] = useState(false);
   const [scope, setScope] = useState<Scope>({ period: "30" as PeriodId, account: null });
@@ -88,7 +90,7 @@ function MainWindow() {
                   : "border-transparent text-ink-faint hover:text-ink-dim",
               )}
             >
-              {t.label}
+              {tr(t.label)}
             </button>
           ))}
         </nav>
@@ -103,19 +105,19 @@ function MainWindow() {
             />
           )}
           <Button onClick={() => void refresh()} disabled={busy}>
-            {busy ? "sincronizando…" : "Actualizar"}
+            {busy ? tr("syncing…") : tr("Refresh")}
           </Button>
-          <Button onClick={() => void invoke("hide_main_window")}>Ocultar</Button>
+          <Button onClick={() => void invoke("hide_main_window")}>{tr("Hide")}</Button>
         </div>
       </header>
 
       <main className="flex-1 overflow-y-auto p-3">
-        <Suspense fallback={<Empty>cargando…</Empty>}>
+        <Suspense fallback={<Empty>{tr("loading…")}</Empty>}>
           {tab === "overview" ? (
             data ? (
               <Overview data={data} />
             ) : (
-              <Empty>leyendo transcripts…</Empty>
+              <Empty>{tr("reading transcripts…")}</Empty>
             )
           ) : tab === "sessions" ? (
             <Sessions

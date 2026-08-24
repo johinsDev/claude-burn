@@ -43,6 +43,8 @@ pub fn run() {
             commands::set_budget,
             commands::cleanup_preview,
             commands::cleanup_subagents,
+            commands::lang,
+            commands::set_lang,
             commands::profiles_list,
             commands::profile_add,
             commands::profile_set_hidden,

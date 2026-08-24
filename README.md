@@ -332,7 +332,8 @@ pnpm turbo lint typecheck build           # frontend
 cargo test && cargo clippy -- -D warnings # Rust
 ```
 
-Note: code comments and the UI are in Spanish.
+The UI ships in English; Spanish is available under Settings → Language.
+Code comments are in Spanish.
 
 ## Troubleshooting
 

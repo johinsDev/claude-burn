@@ -1,5 +1,6 @@
 import { PERIODS, type PeriodId } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 export type Scope = { period: PeriodId; account: string | null };
 
@@ -23,6 +24,7 @@ export function FilterBar({
   dataFrom?: string | null;
   dataTo?: string | null;
 }) {
+  const t = useT();
   const showingAll = scope.period === "all";
   return (
     <div className="flex items-center gap-2">
@@ -33,14 +35,14 @@ export function FilterBar({
             active={scope.period === p.id}
             onClick={() => onChange({ ...scope, period: p.id })}
           >
-            {p.label}
+            {t(p.label)}
           </Chip>
         ))}
       </Group>
 
       <Group>
         <Chip active={scope.account === null} onClick={() => onChange({ ...scope, account: null })}>
-          todas
+          {t("all")}
         </Chip>
         {accounts.map((a) => (
           <Chip
