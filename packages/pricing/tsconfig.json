@@ -1,0 +1,4 @@
+{
+  "extends": "@claude-burn/config/tsconfig.base.json",
+  "include": ["*.ts"]
+}

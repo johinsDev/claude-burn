@@ -1,0 +1,22 @@
+{
+  "name": "claude-burn",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.21.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md,css}\"",
+    "tauri": "pnpm --filter @claude-burn/desktop tauri"
+  },
+  "devDependencies": {
+    "oxlint": "^1.14.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "engines": { "node": ">=22" }
+}

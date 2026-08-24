@@ -1,0 +1,30 @@
+{
+  "$comment": "Fuente unica de precios. Consumido por TypeScript (display) y por Rust via include_str!. Precios en USD por millon de tokens (MTok). Verificado contra platform.claude.com/docs/en/about-claude/pricing el 2026-08-24.",
+  "updated": "2026-08-24",
+  "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "multipliers": {
+    "cache_write_5m": 1.25,
+    "cache_write_1h": 2.0,
+    "cache_read": 0.1,
+    "inference_geo_us": 1.1,
+    "batch": 0.5
+  },
+  "web_search_per_1k_requests": 10.0,
+  "models": [
+    { "id": "claude-fable-5",   "label": "Fable 5",   "input": 10.0, "output": 50.0 },
+    { "id": "claude-mythos-5",  "label": "Mythos 5",  "input": 10.0, "output": 50.0 },
+    { "id": "claude-opus-5",    "label": "Opus 5",    "input": 5.0,  "output": 25.0, "fast": { "input": 10.0, "output": 50.0 } },
+    { "id": "claude-opus-4-8",  "label": "Opus 4.8",  "input": 5.0,  "output": 25.0, "fast": { "input": 10.0, "output": 50.0 } },
+    { "id": "claude-opus-4-7",  "label": "Opus 4.7",  "input": 5.0,  "output": 25.0 },
+    { "id": "claude-opus-4-6",  "label": "Opus 4.6",  "input": 5.0,  "output": 25.0 },
+    { "id": "claude-opus-4-5",  "label": "Opus 4.5",  "input": 5.0,  "output": 25.0 },
+    { "id": "claude-opus-4-1",  "label": "Opus 4.1",  "input": 15.0, "output": 75.0 },
+    { "id": "claude-opus-4",    "label": "Opus 4",    "input": 15.0, "output": 75.0 },
+    { "id": "claude-sonnet-5",  "label": "Sonnet 5",  "input": 2.0,  "output": 10.0 },
+    { "id": "claude-sonnet-4-6","label": "Sonnet 4.6","input": 3.0,  "output": 15.0 },
+    { "id": "claude-sonnet-4-5","label": "Sonnet 4.5","input": 3.0,  "output": 15.0 },
+    { "id": "claude-sonnet-4",  "label": "Sonnet 4",  "input": 3.0,  "output": 15.0 },
+    { "id": "claude-haiku-4-5", "label": "Haiku 4.5", "input": 1.0,  "output": 5.0 },
+    { "id": "claude-3-5-haiku", "label": "Haiku 3.5", "input": 0.8,  "output": 4.0 }
+  ]
+}

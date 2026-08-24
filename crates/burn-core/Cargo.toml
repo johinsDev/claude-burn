@@ -1,0 +1,21 @@
+[package]
+name = "burn-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Ingesta, deduplicacion y calculo de costo de los transcripts de Claude Code"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+rusqlite.workspace = true
+memchr.workspace = true
+chrono.workspace = true
+walkdir.workspace = true
+dirs.workspace = true
+notify.workspace = true
+
+[[bin]]
+name = "burn-cli"
+path = "src/bin/burn-cli.rs"

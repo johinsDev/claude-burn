@@ -1,0 +1,9 @@
+{
+  "name": "@claude-burn/pricing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "exports": { ".": "./index.ts", "./pricing.json": "./pricing.json" },
+  "scripts": { "lint": "oxlint .", "typecheck": "tsc --noEmit" }
+}
