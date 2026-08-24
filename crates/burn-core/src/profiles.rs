@@ -72,6 +72,13 @@ pub struct ProfileSettings {
     /// Nombres de perfiles que el usuario decidio ignorar.
     #[serde(default)]
     pub hidden: Vec<String>,
+    /// Config dirs descubiertos que el usuario saco de la lista.
+    ///
+    /// Va aparte de `hidden` porque son dos cosas distintas: oculto sigue
+    /// listado y se puede volver a prender de un click; quitado desaparece
+    /// del escaneo. Se guardan igual para que quitar no sea irreversible.
+    #[serde(default)]
+    pub ignored_dirs: Vec<PathBuf>,
 }
 
 /// Un config dir candidato, tal como lo ve la pantalla de ajustes.
@@ -93,6 +100,7 @@ pub struct ProfileEntry {
 pub fn list_all(settings: &ProfileSettings) -> Result<Vec<ProfileEntry>> {
     let mut out: Vec<ProfileEntry> = discover()?
         .into_iter()
+        .filter(|p| !settings.ignored_dirs.contains(&p.config_dir))
         .map(|profile| entry(profile, true, settings))
         .collect();
     for dir in &settings.extra_dirs {

@@ -37,6 +37,11 @@ function AccountsPanel({
   const [dir, setDir] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { data: ignoredCount, reload: reloadIgnored } = useAsyncData(
+    () => api.profilesIgnoredCount(),
+    [],
+  );
+  const ignored = ignoredCount ?? 0;
 
   const run = async (fn: () => Promise<ProfileEntry[]>) => {
     setBusy(true);
@@ -44,6 +49,7 @@ function AccountsPanel({
     try {
       onChange(await fn());
       setDir("");
+      reloadIgnored();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -91,14 +97,13 @@ function AccountsPanel({
                 >
                   {p.hidden ? "Mostrar" : "Ocultar"}
                 </Button>
-                {p.discovered ? null : (
-                  <Button
-                    disabled={busy}
-                    onClick={() => void run(() => api.profileForget(p.config_dir))}
-                  >
-                    Quitar
-                  </Button>
-                )}
+                <Button
+                  disabled={busy}
+                  onClick={() => void run(() => api.profileForget(p.config_dir))}
+                  title="sacar de la lista — no borra datos, se puede deshacer"
+                >
+                  Quitar
+                </Button>
               </span>
             </div>
             <div className="mt-0.5 truncate text-[10px] text-ink-faint">
@@ -127,6 +132,17 @@ function AccountsPanel({
           </Button>
         </div>
         {error ? <p className="text-[10.5px] text-crit">{error}</p> : null}
+        {ignored > 0 ? (
+          <p className="flex items-center justify-between gap-2 text-[10.5px] text-ink-faint">
+            <span>
+              {count(ignored)} config {ignored === 1 ? "dir quitado" : "dirs quitados"} del
+              escaneo
+            </span>
+            <Button disabled={busy} onClick={() => void run(api.profilesRestore)}>
+              Restaurar
+            </Button>
+          </p>
+        ) : null}
       </div>
     </Panel>
   );

@@ -585,15 +585,39 @@ pub fn profile_set_hidden(
     profiles_list(state)
 }
 
-/// Saca de la lista un config dir agregado a mano.
+/// Saca un config dir de la lista.
+///
+/// Los agregados a mano se olvidan; los descubiertos se anotan para que el
+/// escaneo del home no los vuelva a traer. Ninguno de los dos borra datos: los
+/// turnos ya ingeridos siguen en la base.
 #[tauri::command]
 pub fn profile_forget(state: State<'_, AppState>, dir: String) -> Res<Vec<profiles::ProfileEntry>> {
     let path = profiles::expand_home(&dir);
     let mut settings = state.profile_settings();
+    let was_manual = settings.extra_dirs.iter().any(|d| d == &path);
     settings.extra_dirs.retain(|d| d != &path);
+    if !was_manual && !settings.ignored_dirs.contains(&path) {
+        settings.ignored_dirs.push(path);
+    }
     state.save_profile_settings(&settings).map_err(err)?;
     state.reload_profiles().map_err(err)?;
     profiles_list(state)
+}
+
+/// Vuelve a traer todo lo que se habia quitado del escaneo.
+#[tauri::command]
+pub fn profiles_restore(state: State<'_, AppState>) -> Res<Vec<profiles::ProfileEntry>> {
+    let mut settings = state.profile_settings();
+    settings.ignored_dirs.clear();
+    state.save_profile_settings(&settings).map_err(err)?;
+    state.reload_profiles().map_err(err)?;
+    profiles_list(state)
+}
+
+/// Cuantos config dirs se quitaron del escaneo, para poder ofrecer deshacer.
+#[tauri::command]
+pub fn profiles_ignored_count(state: State<'_, AppState>) -> Res<usize> {
+    Ok(state.profile_settings().ignored_dirs.len())
 }
 
 /// Abre la ventana principal en el detalle de una sesion.

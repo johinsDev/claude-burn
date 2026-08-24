@@ -7,7 +7,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
  * mientras se renderiza rompe con el render concurrente, que puede descartar
  * un render a medias y dejar la ref apuntando a algo que nunca se monto.
  */
-function useLatest<T>(value: T) {
+export function useLatest<T>(value: T) {
   const ref = useRef(value);
   useLayoutEffect(() => {
     ref.current = value;

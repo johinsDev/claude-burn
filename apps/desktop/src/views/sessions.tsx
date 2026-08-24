@@ -14,7 +14,7 @@ import {
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { SessionDetail } from "@/views/session-detail";
-import { useAsyncData } from "@/hooks/use-async-data";
+import { useAsyncData, useLatest } from "@/hooks/use-async-data";
 
 type SortKey = "cost_usd" | "cost_per_turn" | "max_ctx" | "turns" | "last_ts";
 
@@ -47,17 +47,23 @@ export function Sessions({
   // La sesion pedida se busca por id y no en `rows`: una sesion viva puede
   // quedar fuera del filtro de periodo y el click del popover fallaria justo
   // cuando mas sirve.
+  //
+  // El callback va por ref y no en las deps: es una funcion nueva en cada
+  // render del padre, asi que estaba en las deps el efecto se cancelaba a si
+  // mismo cada vez que llegaba el refresco de datos, y el detalle no abria.
+  const handled = useLatest(onFocusHandled);
   useEffect(() => {
     if (!focusSessionId) return;
     let live = true;
     void api.sessionRow(focusSessionId).then((row) => {
-      if (live && row) setSelected(row);
-      onFocusHandled?.();
+      if (!live) return;
+      if (row) setSelected(row);
+      handled.current?.();
     });
     return () => {
       live = false;
     };
-  }, [focusSessionId, onFocusHandled]);
+  }, [focusSessionId, handled]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();

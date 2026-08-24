@@ -98,7 +98,7 @@ fn main() -> Result<()> {
         println!();
     }
 
-    if cmd != "sync" {
+    if !matches!(cmd, "sync" | "status") {
         println!("== alcance: {} ==\n", scope_label(&filter));
     }
 
@@ -140,6 +140,7 @@ fn main() -> Result<()> {
             };
             print_timeline(&db, id)?;
         }
+        "status" => print_status(&db, &profs)?,
         "agents" => print_agents(&db, &filter)?,
         "context" => print_context(&db, &filter)?,
         "plan" => print_plan(&profs)?,
@@ -234,6 +235,68 @@ fn print_sessions(db: &Store, f: &Filter, n: i64) -> Result<()> {
         );
         println!("      \u{2192} {}", describe(&s));
     }
+    Ok(())
+}
+
+/// Los techos y como vamos, en JSON, para que lo consuman los hooks de Claude
+/// Code (statusline y guard de presupuesto).
+///
+/// Existe para que la app y los hooks compartan una sola fuente de verdad. La
+/// alternativa era que el hook llamara a `npx ccusage`, que arranca un proceso
+/// de node en cada prompt y ademas no cuenta los subagentes.
+fn print_status(db: &Store, profs: &[burn_core::profiles::Profile]) -> Result<()> {
+    use burn_core::profiles::Billing;
+    let now = chrono::Local::now();
+    let today = now.format("%Y-%m-%d").to_string();
+    let month = now.format("%Y-%m").to_string();
+    let monday = (now
+        - chrono::Duration::days(i64::from(
+            chrono::Datelike::weekday(&now).num_days_from_monday(),
+        )))
+    .date_naive()
+    .and_hms_opt(0, 0, 0)
+    .and_then(|d| d.and_local_timezone(chrono::Local).single())
+    .map(|d| {
+        d.with_timezone(&chrono::Utc)
+            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+            .to_string()
+    })
+    .unwrap_or_default();
+
+    // Solo las cuentas con overage: el resto no se factura y meterlas aca
+    // haria que el guard bloqueara por plata que nadie cobra.
+    let billable: Vec<&str> = profs
+        .iter()
+        .filter(|p| p.billing == Billing::Overage)
+        .map(|p| p.name.as_str())
+        .collect();
+    let mut day = 0.0;
+    let mut week = 0.0;
+    let mut mon = 0.0;
+    for name in &billable {
+        day += db.cost_on_day(&today, Some(name))?;
+        week += db.cost_since(&monday, Some(name))?;
+        mon += db.cost_in_month(&month, Some(name))?;
+    }
+
+    let cfg = db
+        .get_setting("alert_config")?
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .unwrap_or(serde_json::Value::Null);
+    let budget = |key: &str| cfg.get(key).and_then(serde_json::Value::as_f64);
+
+    println!(
+        "{}",
+        serde_json::json!({
+            "today": day,
+            "day_budget": budget("budget_daily_usd"),
+            "week": week,
+            "week_budget": budget("budget_weekly_usd"),
+            "month": mon,
+            "month_budget": budget("budget_monthly_usd"),
+            "accounts": billable,
+        })
+    );
     Ok(())
 }
 

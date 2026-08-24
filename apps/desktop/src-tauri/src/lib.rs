@@ -47,6 +47,8 @@ pub fn run() {
             commands::profile_add,
             commands::profile_set_hidden,
             commands::profile_forget,
+            commands::profiles_restore,
+            commands::profiles_ignored_count,
             commands::open_session,
             commands::session_row,
             commands::show_main_window,

@@ -242,6 +242,8 @@ export const api = {
   profileSetHidden: (name: string, hidden: boolean) =>
     invoke<ProfileEntry[]>("profile_set_hidden", { name, hidden }),
   profileForget: (dir: string) => invoke<ProfileEntry[]>("profile_forget", { dir }),
+  profilesRestore: () => invoke<ProfileEntry[]>("profiles_restore"),
+  profilesIgnoredCount: () => invoke<number>("profiles_ignored_count"),
   cleanupPreview: (olderThanDays: number) =>
     invoke<CleanupPreview>("cleanup_preview", { olderThanDays }),
   cleanupSubagents: (olderThanDays: number) =>
