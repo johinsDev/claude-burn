@@ -1,16 +1,36 @@
-# claude-burn
+<h1 align="center">claude-burn</h1>
 
-Track what Claude Code actually costs you — per session, per model, per
-project, with each account kept separate. It lives in the macOS menu bar, warns
-you **before** a session balloons, and can block the next prompt once you've
-blown your budget.
+<p align="center">
+  Track what Claude&nbsp;Code actually costs you — per session, per model,
+  per account.<br />
+  Lives in the macOS menu bar, warns you <b>before</b> a session balloons, and
+  can block the next prompt once you're over budget.
+</p>
+
+<p align="center">
+  <a href="https://github.com/johinsDev/claude-burn/releases/latest/download/claude-burn-macos-arm64.dmg"><b>⬇ Download for macOS</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://claude-burn-three.vercel.app"><b>Website</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/johinsDev/claude-burn/releases">All releases</a>
+</p>
+
+<p align="center">
+  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-e8ecf5?style=flat-square&labelColor=12151d" />
+  <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-arm64-e8ecf5?style=flat-square&labelColor=12151d" />
+  <img alt="Rust + Tauri v2" src="https://img.shields.io/badge/Rust%20%2B%20Tauri-v2-f0803c?style=flat-square&labelColor=12151d" />
+  <img alt="Zero network calls" src="https://img.shields.io/badge/network%20calls-zero-4ec9a0?style=flat-square&labelColor=12151d" />
+  <img alt="MIT" src="https://img.shields.io/badge/license-MIT-8f9ab3?style=flat-square&labelColor=12151d" />
+</p>
+
+---
 
 **Fully local. The app makes zero network requests** — not to Anthropic's API,
 not to anything. It only reads files Claude Code already writes to disk, and it
 never touches `.credentials.json`. That matters, because your transcripts
 contain your source code.
 
-**[claude-burn.vercel.app](https://claude-burn-three.vercel.app)** — what it looks like, and the numbers behind it.
+**See it in action → [claude-burn-three.vercel.app](https://claude-burn-three.vercel.app)**
 
 ## Why
 
@@ -45,9 +65,12 @@ Three things that change the number, which other tools miss:
 Requires [Rust](https://rustup.rs), Node 20+ and pnpm. macOS only for now
 (the menu bar and notification bits are AppKit-specific; the core is portable).
 
-**Download the `.dmg`** from
-[Releases](https://github.com/johinsDev/claude-burn/releases), or build it
-yourself:
+**[⬇ Download the `.dmg`](https://github.com/johinsDev/claude-burn/releases/latest/download/claude-burn-macos-arm64.dmg)**
+(4.4 MB, Apple Silicon) — that link always serves the newest release. Every
+version is listed under
+[Releases](https://github.com/johinsDev/claude-burn/releases).
+
+Or build it yourself:
 
 ```bash
 pnpm install
@@ -310,6 +333,31 @@ cargo test && cargo clippy -- -D warnings # Rust
 ```
 
 Note: code comments and the UI are in Spanish.
+
+## Troubleshooting
+
+**"claude-burn is damaged and can't be opened"** — the build is unsigned, so
+macOS quarantines it. Clear the flag:
+`xattr -dr com.apple.quarantine /Applications/claude-burn.app`
+
+**Nothing happens when I open it** — it's a menu bar app. Look for the `$` in
+the menu bar, not the Dock. It only opens a window when you launch it yourself;
+autostart at login starts it hidden.
+
+**Every account says "unknown billing"** — no session is signed in for that
+config dir, so there's no `oauthAccount` in its `.claude.json` to read. Run
+Claude Code once in that account.
+
+**The plan limit looks frozen** — it comes from `cachedUsageUtilization`, which
+Claude Code refreshes itself. If the window already reset, the app labels it as
+stale rather than showing you a dead number.
+
+**"All time" is only a few weeks** — Claude Code prunes old transcripts. The
+app shows the exact range it has next to the filter.
+
+**The block won't stop me** — check `hooks/budget-guard.sh` is wired in
+`settings.json`, that `burn-cli` is on `~/.local/bin`, and that the block is on
+under Ajustes → Bloqueo with a cap actually set for that period.
 
 ## License
 

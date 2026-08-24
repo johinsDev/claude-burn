@@ -395,3 +395,6 @@ h1 em {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; scroll-behavior: auto; }
 }
+
+.ulink { color: var(--cool); text-decoration: none; }
+.ulink:hover { text-decoration: underline; }
