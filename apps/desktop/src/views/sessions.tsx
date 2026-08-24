@@ -145,6 +145,13 @@ export function Sessions({ scope }: { scope: Scope }) {
                         {r.compactions > 0 ? (
                           <Badge tone="ok">{r.compactions} compact</Badge>
                         ) : null}
+                        {r.agents > 0 ? (
+                          <Badge
+                            tone={r.agent_usd / (r.cost_usd || 1) > 0.2 ? "warn" : "neutral"}
+                          >
+                            {r.agents} sub · {money(r.agent_usd)}
+                          </Badge>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

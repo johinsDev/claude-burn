@@ -86,9 +86,17 @@ export function TrayPopover() {
           </p>
         ) : null}
 
+        {/* Facturado, igual que el titular. Sumar la tarifa plana aca hacia
+            que estos dos numeros no significaran nada. */}
         <div className="grid grid-cols-2 gap-2">
-          <MiniStat label="7 dias" value={money(data.week_usd, { compact: true })} />
-          <MiniStat label="30 dias" value={money(data.month_usd, { compact: true })} />
+          <MiniStat
+            label="7 dias · facturado"
+            value={money(data.week_billable_usd, { compact: true })}
+          />
+          <MiniStat
+            label="30 dias · facturado"
+            value={money(data.month_billable_usd, { compact: true })}
+          />
         </div>
 
         {limits.length > 0 ? (

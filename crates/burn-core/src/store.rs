@@ -401,7 +401,9 @@ impl Store {
                     COALESCE((SELECT SUM(fl.compactions) FROM files fl
                               WHERE fl.session_id = t.session_id), 0),
                     GROUP_CONCAT(DISTINCT COALESCE(t.model, t.raw_model)),
-                    m.title, m.prompt
+                    m.title, m.prompt,
+                    COALESCE(SUM(CASE WHEN t.agent_id IS NOT NULL THEN t.cost_usd END), 0),
+                    COUNT(DISTINCT t.agent_id)
              FROM turns t
              LEFT JOIN session_meta m ON m.session_id = t.session_id
              WHERE {SCOPE}
@@ -425,6 +427,8 @@ impl Store {
                     models: r.get::<_, Option<String>>(10)?.unwrap_or_default(),
                     title: r.get(11)?,
                     prompt: r.get(12)?,
+                    agent_usd: r.get(13)?,
+                    agents: r.get(14)?,
                     cost_per_turn: if turns > 0 { cost / turns as f64 } else { 0.0 },
                 })
             })?
@@ -475,6 +479,34 @@ impl Store {
              WHERE ts >= ?1 AND (?2 IS NULL OR account = ?2)",
             params![ts, account],
             |r| r.get(0),
+        )?)
+    }
+
+    /// Cuanto del gasto se lo llevaron los subagentes.
+    ///
+    /// Sus turnos viven en transcripts aparte
+    /// (`<sesion>/subagents/agent-*.jsonl`) que ninguna herramienta que mira
+    /// solo el nivel de arriba cuenta. Se facturan igual.
+    pub fn subagent_split(&self, f: &Filter) -> Result<SubagentSplit> {
+        Ok(self.conn.query_row(
+            &format!(
+                "SELECT COALESCE(SUM(CASE WHEN agent_id IS NOT NULL THEN cost_usd END), 0),
+                        COALESCE(SUM(cost_usd), 0),
+                        COUNT(CASE WHEN agent_id IS NOT NULL THEN 1 END),
+                        COUNT(DISTINCT agent_id),
+                        COUNT(DISTINCT CASE WHEN agent_id IS NOT NULL THEN session_id END)
+                 FROM turns WHERE {SCOPE}"
+            ),
+            params![f.account, f.since],
+            |r| {
+                Ok(SubagentSplit {
+                    cost_usd: r.get(0)?,
+                    total_usd: r.get(1)?,
+                    turns: r.get(2)?,
+                    agents: r.get(3)?,
+                    sessions: r.get(4)?,
+                })
+            },
         )?)
     }
 
@@ -653,10 +685,26 @@ pub struct SessionRow {
     pub avg_ctx: i64,
     pub compactions: i64,
     pub models: String,
+    /// Costo que se fue en subagentes de esta sesion.
+    pub agent_usd: f64,
+    /// Subagentes distintos que lanzo la sesion.
+    pub agents: i64,
     /// Titulo que Claude Code le puso a la sesion, si lo alcanzo a generar.
     pub title: Option<String>,
     /// Primer prompt de la sesion: el respaldo cuando no hay titulo.
     pub prompt: Option<String>,
+}
+
+/// Reparto entre lo que gasto la sesion principal y lo que gastaron sus
+/// subagentes.
+#[derive(Debug, Serialize)]
+pub struct SubagentSplit {
+    pub cost_usd: f64,
+    pub total_usd: f64,
+    pub turns: i64,
+    pub agents: i64,
+    /// Sesiones que llegaron a lanzar al menos un subagente.
+    pub sessions: i64,
 }
 
 #[derive(Debug, Serialize)]

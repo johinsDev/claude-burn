@@ -75,7 +75,11 @@ export type Overview = {
   today_usd: number;
   today_billable_usd: number;
   week_usd: number;
+  /// La parte de `week_usd` que de verdad se factura (cuentas con overage).
+  week_billable_usd: number;
   month_usd: number;
+  month_billable_usd: number;
+  subagents: SubagentSplit;
   by_day: DayRow[];
   by_month: MonthRow[];
   composition: Composition;
@@ -83,6 +87,15 @@ export type Overview = {
   known_accounts: string[];
   data_from: string | null;
   data_to: string | null;
+};
+
+/** Cuanto del gasto se lo llevaron los subagentes, que se facturan aparte. */
+export type SubagentSplit = {
+  cost_usd: number;
+  total_usd: number;
+  turns: number;
+  agents: number;
+  sessions: number;
 };
 
 export type SessionRow = {
@@ -98,6 +111,9 @@ export type SessionRow = {
   avg_ctx: number;
   compactions: number;
   models: string;
+  /// Del costo total, lo que se fue en subagentes de esta sesion.
+  agent_usd: number;
+  agents: number;
   /// Titulo que Claude Code le genero a la sesion, si alcanzo a hacerlo.
   title: string | null;
   /// Primer prompt de la sesion: el respaldo cuando no hay titulo.

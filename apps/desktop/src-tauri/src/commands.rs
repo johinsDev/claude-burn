@@ -5,7 +5,9 @@
 
 use crate::state::{AppState, TraySummary};
 use burn_core::profiles::{self, Billing, LiveSession, PlanUsage};
-use burn_core::store::{Composition, DayRow, Filter, ModelRow, MonthRow, SessionRow, TurnPoint};
+use burn_core::store::{
+    Composition, DayRow, Filter, ModelRow, MonthRow, SessionRow, SubagentSplit, TurnPoint,
+};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
@@ -35,7 +37,13 @@ pub struct Overview {
     pub today_usd: f64,
     pub today_billable_usd: f64,
     pub week_usd: f64,
+    /// La mitad de `week_usd` que de verdad se factura. Sin esto el titular
+    /// mezcla la tarifa plana con el overage y deja de significar nada.
+    pub week_billable_usd: f64,
     pub month_usd: f64,
+    pub month_billable_usd: f64,
+    /// Cuanto del gasto se lo llevaron los subagentes.
+    pub subagents: SubagentSplit,
     pub by_day: Vec<DayRow>,
     pub by_month: Vec<MonthRow>,
     pub composition: Composition,
@@ -46,6 +54,31 @@ pub struct Overview {
     /// que el historico no arranca donde el usuario cree.
     pub data_from: Option<String>,
     pub data_to: Option<String>,
+}
+
+/// Los totales se acumulan por cuenta y no de una sola consulta, porque cada
+/// uno se parte en dos: lo que se factura y lo que es tarifa plana.
+#[derive(Default)]
+struct Totals {
+    today: f64,
+    today_billable: f64,
+    week: f64,
+    week_billable: f64,
+    month: f64,
+    month_billable: f64,
+}
+
+impl Totals {
+    fn add(&mut self, billable: bool, today: f64, week: f64, month: f64) {
+        self.today += today;
+        self.week += week;
+        self.month += month;
+        if billable {
+            self.today_billable += today;
+            self.week_billable += week;
+            self.month_billable += month;
+        }
+    }
 }
 
 fn day_string(offset_days: i64) -> String {
@@ -66,20 +99,21 @@ pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overv
     let db = state.db.lock().unwrap();
 
     let today = day_string(0);
-    let mut today_usd = 0.0;
-    let mut today_billable_usd = 0.0;
+    let (week_from, month_from) = (utc_since(7), utc_since(30));
+    let mut totals = Totals::default();
 
     let mut accounts = Vec::new();
     let mut live_total = 0usize;
     let mut worst: Option<(f64, String)> = None;
 
     for p in &profs {
-        let spent = db.cost_on_day(&today, Some(&p.name))?;
-        today_usd += spent;
         let is_billable = p.billing == Billing::Overage;
-        if is_billable {
-            today_billable_usd += spent;
-        }
+        totals.add(
+            is_billable,
+            db.cost_on_day(&today, Some(&p.name))?,
+            db.cost_since(&week_from, Some(&p.name))?,
+            db.cost_since(&month_from, Some(&p.name))?,
+        );
 
         let plan_usage = profiles::read_plan_usage(p);
         if let Some(u) = &plan_usage {
@@ -124,8 +158,8 @@ pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overv
         .max();
 
     let tray = TraySummary {
-        today_usd,
-        today_billable_usd,
+        today_usd: totals.today,
+        today_billable_usd: totals.today_billable,
         worst_limit_pct,
         worst_limit_kind,
         live_sessions: live_total,
@@ -134,10 +168,13 @@ pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overv
 
     Ok(Overview {
         accounts,
-        today_usd,
-        today_billable_usd,
-        week_usd: db.cost_since(&utc_since(7), None)?,
-        month_usd: db.cost_since(&utc_since(30), None)?,
+        today_usd: totals.today,
+        today_billable_usd: totals.today_billable,
+        week_usd: totals.week,
+        week_billable_usd: totals.week_billable,
+        month_usd: totals.month,
+        month_billable_usd: totals.month_billable,
+        subagents: db.subagent_split(filter)?,
         by_day: db.by_day(filter, 120)?,
         by_month: db.by_month()?,
         composition: db.composition(filter)?,

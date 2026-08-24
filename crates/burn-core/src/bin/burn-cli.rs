@@ -140,6 +140,7 @@ fn main() -> Result<()> {
             };
             print_timeline(&db, id)?;
         }
+        "agents" => print_agents(&db, &filter)?,
         "context" => print_context(&db, &filter)?,
         "plan" => print_plan(&profs)?,
         other => anyhow::bail!("comando desconocido: {other}"),
@@ -232,6 +233,48 @@ fn print_sessions(db: &Store, f: &Filter, n: i64) -> Result<()> {
             s.models
         );
         println!("      \u{2192} {}", describe(&s));
+    }
+    Ok(())
+}
+
+/// Cuanto se va en subagentes y quien los lanza.
+///
+/// Es el gasto mas facil de no ver: sus turnos no estan en el transcript de la
+/// sesion sino en `<sesion>/subagents/agent-*.jsonl`, asi que una herramienta
+/// que mira solo el nivel de arriba no los cuenta. Anthropic si los factura.
+fn print_agents(db: &Store, f: &Filter) -> Result<()> {
+    let split = db.subagent_split(f)?;
+    if split.turns == 0 {
+        println!("== subagentes ==");
+        println!("  ninguno en este alcance");
+        return Ok(());
+    }
+    let share = 100.0 * split.cost_usd / split.total_usd.max(f64::EPSILON);
+    println!("== subagentes ==");
+    println!(
+        "  ${:.0} en {} turnos · {} agentes lanzados en {} sesiones · {:.1}% del gasto",
+        split.cost_usd, split.turns, split.agents, split.sessions, share
+    );
+    println!();
+    println!(
+        "  {:>8}  {:>8}  {:>5}  {:>5}  sesion",
+        "sub $", "total $", "%", "subs"
+    );
+    let mut rows: Vec<_> = db
+        .top_sessions(f, 500)?
+        .into_iter()
+        .filter(|s| s.agents > 0)
+        .collect();
+    rows.sort_by(|a, b| b.agent_usd.total_cmp(&a.agent_usd));
+    for s in rows.iter().take(12) {
+        println!(
+            "  ${:>7.0}  ${:>7.0}  {:>4.0}%  {:>5}  {}",
+            s.agent_usd,
+            s.cost_usd,
+            100.0 * s.agent_usd / s.cost_usd.max(f64::EPSILON),
+            s.agents,
+            describe(s),
+        );
     }
     Ok(())
 }

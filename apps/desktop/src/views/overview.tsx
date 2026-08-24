@@ -10,7 +10,13 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { compositionRows, compositionTotal, type Overview as OverviewData } from "@/lib/api";
+import {
+  compositionRows,
+  compositionTotal,
+  type Billing,
+  type Overview as OverviewData,
+  type SubagentSplit,
+} from "@/lib/api";
 import { Badge, Meter, Panel, PanelHead, Stat } from "@/components/ui/primitives";
 import { ago, limitTone, money, pct, resetState, toneClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -56,10 +62,18 @@ export function Overview({ data }: { data: OverviewData }) {
           />
         </Panel>
         <Panel>
-          <Stat label="Ultimos 7 dias" value={money(data.week_usd, { compact: true })} />
+          <Stat
+            label="7 dias · facturado"
+            value={money(data.week_billable_usd, { compact: true })}
+            sub={flatSub(data.week_usd - data.week_billable_usd)}
+          />
         </Panel>
         <Panel>
-          <Stat label="Ultimos 30 dias" value={money(data.month_usd, { compact: true })} />
+          <Stat
+            label="30 dias · facturado"
+            value={money(data.month_billable_usd, { compact: true })}
+            sub={flatSub(data.month_usd - data.month_billable_usd)}
+          />
         </Panel>
         <Panel>
           <Stat
@@ -161,6 +175,8 @@ export function Overview({ data }: { data: OverviewData }) {
         </Panel>
       </div>
 
+      <SubagentPanel split={data.subagents} />
+
       <div className="grid grid-cols-2 gap-3">
         {data.accounts.map((a) => (
           <Panel key={a.name}>
@@ -168,9 +184,7 @@ export function Overview({ data }: { data: OverviewData }) {
               title={
                 <span className="flex items-center gap-2">
                   {a.name}
-                  <Badge tone={a.is_billable ? "hot" : "neutral"}>
-                    {a.is_billable ? "overage · plata real" : "tarifa plana"}
-                  </Badge>
+                  <BillingBadge billing={a.billing} />
                 </span>
               }
               right={
@@ -181,7 +195,11 @@ export function Overview({ data }: { data: OverviewData }) {
             />
             <div className="space-y-3 px-3.5 py-3">
               <div className="text-[11px] text-ink-dim">
-                {a.email} · {a.org}
+                {[a.email, a.org].filter(Boolean).join(" · ") || (
+                  <span className="text-ink-faint">
+                    Sin sesion iniciada en este config dir.
+                  </span>
+                )}
               </div>
 
               {(a.plan_usage?.limits ?? []).filter((l) => l.is_active).length === 0 ? (
@@ -235,4 +253,61 @@ export function Overview({ data }: { data: OverviewData }) {
       </div>
     </div>
   );
+}
+
+/**
+ * El gasto de los subagentes, que es el mas facil de no ver.
+ *
+ * Sus turnos no viven en el transcript de la sesion sino en archivos aparte
+ * (`<sesion>/subagents/agent-*.jsonl`). Una herramienta que mira solo el nivel
+ * de arriba no los cuenta — pero Anthropic si los factura.
+ */
+function SubagentPanel({ split }: { split: SubagentSplit }) {
+  if (split.turns === 0) return null;
+  const share = split.cost_usd / (split.total_usd || 1);
+  return (
+    <Panel>
+      <PanelHead
+        title="Subagentes"
+        right={
+          <span className="text-[10px] text-ink-faint">
+            transcripts aparte · se facturan igual
+          </span>
+        }
+      />
+      <div className="grid grid-cols-4 divide-x divide-line">
+        <Stat
+          label="Costo"
+          value={money(split.cost_usd)}
+          tone={share > 0.1 ? "text-warn" : undefined}
+          sub={`${(share * 100).toFixed(1)}% del gasto del periodo`}
+        />
+        <Stat label="Turnos" value={split.turns.toLocaleString("es")} />
+        <Stat label="Agentes lanzados" value={split.agents.toLocaleString("es")} />
+        <Stat
+          label="Sesiones que los usan"
+          value={split.sessions}
+          sub="mira la columna sub en Sesiones"
+        />
+      </div>
+    </Panel>
+  );
+}
+
+/** El pie de los totales: lo que se consumio pero no se factura. */
+function flatSub(theoretical: number): string {
+  return theoretical > 0.005
+    ? `+ ${money(theoretical, { compact: true })} de tarifa plana`
+    : "solo cuentas con overage";
+}
+
+/**
+ * Tres estados, no dos. Un config dir sin sesion iniciada no es "tarifa
+ * plana": es que no sabemos como se factura, y decir lo primero es afirmar
+ * algo que no leimos en ningun lado.
+ */
+function BillingBadge({ billing }: { billing: Billing }) {
+  if (billing === "overage") return <Badge tone="hot">overage · plata real</Badge>;
+  if (billing === "flat") return <Badge tone="neutral">tarifa plana</Badge>;
+  return <Badge tone="neutral">facturacion desconocida</Badge>;
 }
