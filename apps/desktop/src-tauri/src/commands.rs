@@ -295,7 +295,7 @@ pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overv
     let month_budget = cfg.budget_monthly_usd.filter(|l| *l > 0.0);
 
     // Si el filtro apunta a una cuenta de tarifa plana, el techo no le aplica.
-    // Antes el panel seguia mostrando la factura de cruisebound aunque
+    // Antes el panel seguia mostrando la factura de la cuenta que si se factura aunque
     // estuvieras mirando personal, que es justo lo que confunde.
     let flat_account = filter.account.as_ref().and_then(|name| {
         profs

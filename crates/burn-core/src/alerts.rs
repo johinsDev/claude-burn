@@ -338,7 +338,7 @@ mod tests {
             status: Some("busy".into()),
             started_at_ms: None,
             version: None,
-            account: "cruisebound".into(),
+            account: "trabajo".into(),
         }
     }
 
@@ -397,10 +397,10 @@ mod tests {
             ..snap()
         };
         let a = &evaluate(&s, &AlertConfig::default())[0];
-        assert_eq!(a.account.as_deref(), Some("cruisebound"));
+        assert_eq!(a.account.as_deref(), Some("trabajo"));
         assert_eq!(a.session_id.as_deref(), Some("s1"));
         assert_eq!(a.project.as_deref(), Some("/Users/x/proyecto"));
-        assert!(a.body.contains("cruisebound"));
+        assert!(a.body.contains("trabajo"));
     }
 
     #[test]

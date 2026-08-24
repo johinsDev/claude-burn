@@ -265,7 +265,7 @@ export function Overview({ data }: { data: OverviewData }) {
  */
 function MonthBudgetPanel({ pace }: { pace: MonthPace }) {
   // Filtrar por una cuenta de tarifa plana no puede cambiar tu factura. Antes
-  // el panel seguia mostrando el techo de cruisebound y parecia que el filtro
+  // el panel seguia mostrando el techo de la cuenta facturable y parecia que el filtro
   // no funcionaba; decir por que es mas util que fingir un numero.
   if (pace.scoped_flat_account) {
     return (

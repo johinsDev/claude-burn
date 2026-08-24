@@ -40,7 +40,7 @@ impl Profile {
 }
 
 /// Deriva un nombre de perfil desde el nombre del directorio:
-/// `.claude-cruisebound` -> `cruisebound`, `.claude` -> `default`.
+/// `.claude-trabajo` -> `trabajo`, `.claude` -> `default`.
 fn profile_name(dir: &Path) -> String {
     let base = dir.file_name().and_then(|s| s.to_str()).unwrap_or("claude");
     match base.strip_prefix(".claude-") {
@@ -360,8 +360,8 @@ mod tests {
     #[test]
     fn deriva_nombre_de_perfil() {
         assert_eq!(
-            profile_name(Path::new("/Users/x/.claude-cruisebound")),
-            "cruisebound"
+            profile_name(Path::new("/Users/x/.claude-trabajo")),
+            "trabajo"
         );
         assert_eq!(
             profile_name(Path::new("/Users/x/.claude-personal")),
