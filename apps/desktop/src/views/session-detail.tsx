@@ -15,6 +15,7 @@ import { Badge, Button, Empty, Stat } from "@/components/ui/primitives";
 import { ChartFrame, fmt, tooltipStyle } from "@/components/ui/chart-frame";
 import {
   contextTone,
+  count,
   money,
   projectName,
   sessionTitle,
@@ -128,7 +129,7 @@ export function SessionDetail({
         <div className="grid grid-cols-5 divide-x divide-line border-b border-line">
           <Stat label="Costo" value={money(session.cost_usd)} />
           <Stat label="$ por turno" value={money(session.cost_per_turn)} />
-          <Stat label="Turnos" value={session.turns} />
+          <Stat label="Turnos" value={count(session.turns)} />
           <Stat
             label="Contexto max"
             value={tokens(session.max_ctx)}

@@ -9,7 +9,7 @@ use burn_core::store::{
     Composition, DayRow, Filter, ModelRow, MonthRow, SessionRow, SubagentSplit, TurnPoint,
 };
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 type Res<T> = Result<T, String>;
 
@@ -76,10 +76,44 @@ pub struct MonthPace {
     /// Lo que queda del techo repartido en los dias que faltan. `None` sin
     /// techo, `Some(0.0)` cuando ya se paso.
     pub daily_allowance_usd: Option<f64>,
+    /// Como vamos hoy y esta semana, no solo en el mes.
+    pub today: PeriodPace,
+    pub week: PeriodPace,
+    /// `true` cuando el filtro apunta a una cuenta de tarifa plana: el techo
+    /// no le aplica y mostrarlo ahi seria mentir.
+    pub scoped_flat_account: Option<String>,
 }
 
-fn month_pace(spent_usd: f64, budget_usd: Option<f64>) -> MonthPace {
+/// Un periodo corto medido contra su techo.
+#[derive(Serialize)]
+pub struct PeriodPace {
+    pub spent_usd: f64,
+    pub budget_usd: Option<f64>,
+    /// Etiqueta de cuanto va del periodo, p.ej. "dia 3 de 7".
+    pub elapsed_label: String,
+}
+
+struct PaceInput {
+    month_usd: f64,
+    today_usd: f64,
+    week_usd: f64,
+    monthly_budget: Option<f64>,
+    daily_budget: Option<f64>,
+    weekly_budget: Option<f64>,
+    flat_account: Option<String>,
+}
+
+fn month_pace(input: PaceInput) -> MonthPace {
     use chrono::Datelike;
+    let PaceInput {
+        month_usd: spent_usd,
+        today_usd,
+        week_usd,
+        monthly_budget: budget_usd,
+        daily_budget,
+        weekly_budget,
+        flat_account,
+    } = input;
     let now = chrono::Local::now();
     let day = now.day();
     let days_in_month = days_in_month(now.year(), now.month());
@@ -90,6 +124,9 @@ fn month_pace(spent_usd: f64, budget_usd: Option<f64>) -> MonthPace {
         let left_days = f64::from(days_in_month.saturating_sub(day).max(1));
         ((b - spent_usd) / left_days).max(0.0)
     });
+    // La semana arranca el lunes, como la de Anthropic y como la lee
+    // cualquiera que mire un calendario.
+    let weekday = now.weekday().num_days_from_monday() + 1;
     MonthPace {
         month: now.format("%Y-%m").to_string(),
         spent_usd,
@@ -98,6 +135,17 @@ fn month_pace(spent_usd: f64, budget_usd: Option<f64>) -> MonthPace {
         days_in_month,
         projected_usd,
         daily_allowance_usd,
+        today: PeriodPace {
+            spent_usd: today_usd,
+            budget_usd: daily_budget,
+            elapsed_label: now.format("%H:%M").to_string(),
+        },
+        week: PeriodPace {
+            spent_usd: week_usd,
+            budget_usd: weekly_budget,
+            elapsed_label: format!("dia {weekday} de 7"),
+        },
+        scoped_flat_account: flat_account,
     }
 }
 
@@ -142,6 +190,28 @@ fn day_string(offset_days: i64) -> String {
     now.format("%Y-%m-%d").to_string()
 }
 
+/// Instante UTC del lunes de esta semana a las 00:00 locales.
+///
+/// La semana del techo es calendario, igual que el mes: una ventana movil de
+/// 7 dias nunca se reinicia y no se puede leer contra un calendario.
+fn utc_week_start() -> String {
+    use chrono::Datelike;
+    let now = chrono::Local::now();
+    let back = i64::from(now.weekday().num_days_from_monday());
+    let monday = now.date_naive() - chrono::Duration::days(back);
+    monday
+        .and_hms_opt(0, 0, 0)
+        .and_then(|dt| dt.and_local_timezone(chrono::Local).single())
+        .map_or_else(
+            || utc_since(7),
+            |dt| {
+                dt.with_timezone(&chrono::Utc)
+                    .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+                    .to_string()
+            },
+        )
+}
+
 /// Instante UTC desde el que contar, N dias atras. Los transcripts guardan la
 /// hora en UTC ISO-8601, asi que la comparacion es lexicografica.
 fn utc_since(days: i64) -> String {
@@ -157,8 +227,10 @@ pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overv
     let today = day_string(0);
     let (week_from, month_from) = (utc_since(7), utc_since(30));
     let this_month = crate::alerts::this_month();
+    let week_start = utc_week_start();
     let mut totals = Totals::default();
     let mut month_billable = 0.0;
+    let mut week_billable = 0.0;
 
     let mut accounts = Vec::new();
     let mut live_total = 0usize;
@@ -174,6 +246,7 @@ pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overv
         );
         if is_billable {
             month_billable += db.cost_in_month(&this_month, Some(&p.name))?;
+            week_billable += db.cost_since(&week_start, Some(&p.name))?;
         }
 
         let plan_usage = profiles::read_plan_usage(p);
@@ -218,9 +291,39 @@ pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overv
         .filter_map(|pts| pts.last().map(|p| p.ctx_tok))
         .max();
 
-    let month_budget = crate::alerts::config_from_db(&db)
-        .budget_monthly_usd
-        .filter(|l| *l > 0.0);
+    let cfg = crate::alerts::config_from_db(&db);
+    let month_budget = cfg.budget_monthly_usd.filter(|l| *l > 0.0);
+
+    // Si el filtro apunta a una cuenta de tarifa plana, el techo no le aplica.
+    // Antes el panel seguia mostrando la factura de cruisebound aunque
+    // estuvieras mirando personal, que es justo lo que confunde.
+    let flat_account = filter.account.as_ref().and_then(|name| {
+        profs
+            .iter()
+            .find(|p| &p.name == name && p.billing != Billing::Overage)
+            .map(|p| p.name.clone())
+    });
+    let pace = match &flat_account {
+        // Una cuenta de tarifa plana muestra su consumo, sin techo.
+        Some(name) => PaceInput {
+            month_usd: db.cost_in_month(&this_month, Some(name))?,
+            today_usd: db.cost_on_day(&today, Some(name))?,
+            week_usd: db.cost_since(&week_start, Some(name))?,
+            monthly_budget: None,
+            daily_budget: None,
+            weekly_budget: None,
+            flat_account: Some(name.clone()),
+        },
+        None => PaceInput {
+            month_usd: month_billable,
+            today_usd: totals.today_billable,
+            week_usd: week_billable,
+            monthly_budget: month_budget,
+            daily_budget: cfg.budget_daily_usd.filter(|l| *l > 0.0),
+            weekly_budget: cfg.budget_weekly_usd.filter(|l| *l > 0.0),
+            flat_account: None,
+        },
+    };
 
     let tray = TraySummary {
         today_usd: totals.today,
@@ -242,7 +345,7 @@ pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overv
         month_usd: totals.month,
         month_billable_usd: totals.month_billable,
         subagents: db.subagent_split(filter)?,
-        month: month_pace(month_billable, month_budget),
+        month: month_pace(pace),
         by_day: db.by_day(filter, 120)?,
         by_month: db.by_month()?,
         composition: db.composition(filter)?,
@@ -376,6 +479,31 @@ pub fn reveal_main_window(app: &AppHandle) {
         let _ = main.unminimize();
         let _ = main.set_focus();
     }
+}
+
+/// Abre la ventana principal en el detalle de una sesion.
+///
+/// Es lo que hace util la lista de sesiones vivas del popover: ver que una se
+/// esta inflando y poder mirarla sin buscarla a mano en la tabla.
+#[tauri::command]
+pub fn open_session(app: AppHandle, session_id: String) -> Res<()> {
+    reveal_main_window(&app);
+    app.emit("burn://open-session", session_id).map_err(err)?;
+    Ok(())
+}
+
+/// Una sola sesion por id, sin filtro de periodo.
+///
+/// El popover puede pedir una sesion viva que no entra en el recorte actual
+/// de la tabla; sin esto, abrir el detalle desde ahi fallaria justo cuando el
+/// filtro esta en "Hoy".
+#[tauri::command]
+pub fn session_row(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Res<Option<SessionWithBilling>> {
+    let rows = sessions(state, Some(Filter::default()), Some(5000))?;
+    Ok(rows.into_iter().find(|r| r.row.session_id == session_id))
 }
 
 /// Trae la ventana principal al frente y esconde el popover.

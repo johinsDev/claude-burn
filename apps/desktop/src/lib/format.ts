@@ -1,16 +1,34 @@
+/**
+ * Separador de miles. Se fija es-ES a proposito en vez de dejar el locale del
+ * sistema: los numeros de la app se leen al lado de codigo y de rutas, y que
+ * cambien de forma segun la maquina hace imposible compararlos de memoria.
+ */
+const GROUPED = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 });
+
+function group(n: number): string {
+  return GROUPED.format(n);
+}
+
 /** Formatea dolares con la precision que corresponde a la magnitud. */
 export function money(n: number, opts: { compact?: boolean } = {}): string {
   const abs = Math.abs(n);
-  if (opts.compact && abs >= 1000) return `$${(n / 1000).toFixed(1)}k`;
-  if (abs >= 100) return `$${n.toFixed(0)}`;
-  if (abs >= 1) return `$${n.toFixed(2)}`;
+  const sign = n < 0 ? "-" : "";
+  if (opts.compact && abs >= 1000) return `${sign}$${(abs / 1000).toFixed(1)}k`;
+  if (abs >= 1000) return `${sign}$${group(abs)}`;
+  if (abs >= 100) return `${sign}$${abs.toFixed(0)}`;
+  if (abs >= 1) return `${sign}$${abs.toFixed(2)}`;
   if (abs === 0) return "$0";
-  return `$${n.toFixed(3)}`;
+  return `${sign}$${abs.toFixed(3)}`;
+}
+
+/** Enteros con separador de miles: turnos, agentes, sesiones. */
+export function count(n: number): string {
+  return group(n);
 }
 
 export function tokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${Math.round(n / 1000)}k`;
+  if (n >= 1_000) return `${group(Math.round(n / 1000))}k`;
   return String(n);
 }
 

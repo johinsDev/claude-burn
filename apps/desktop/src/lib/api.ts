@@ -101,6 +101,17 @@ export type MonthPace = {
   projected_usd: number;
   /// Lo que queda del techo repartido en los dias que faltan.
   daily_allowance_usd: number | null;
+  today: PeriodPace;
+  week: PeriodPace;
+  /// Nombre de la cuenta cuando el filtro apunta a una de tarifa plana: el
+  /// techo no le aplica.
+  scoped_flat_account: string | null;
+};
+
+export type PeriodPace = {
+  spent_usd: number;
+  budget_usd: number | null;
+  elapsed_label: string;
 };
 
 /** Cuanto del gasto se lo llevaron los subagentes, que se facturan aparte. */
@@ -206,6 +217,9 @@ export const api = {
   syncNow: () => invoke<number>("sync_now"),
   sessions: (filter?: Filter, limit?: number) =>
     invoke<SessionRow[]>("sessions", { filter, limit }),
+  openSession: (sessionId: string) => invoke<void>("open_session", { sessionId }),
+  sessionRow: (sessionId: string) =>
+    invoke<SessionRow | null>("session_row", { sessionId }),
   sessionTimeline: (sessionId: string) =>
     invoke<TurnPoint[]>("session_timeline", { sessionId }),
   models: (filter?: Filter) => invoke<ModelRow[]>("models", { filter }),

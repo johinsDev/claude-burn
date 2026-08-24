@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, buildFilter, type SessionRow } from "@/lib/api";
 import type { Scope } from "@/components/ui/filter-bar";
 import { Badge, Empty, Panel, PanelHead } from "@/components/ui/primitives";
 import {
   contextTone,
+  count,
   money,
   projectName,
   sessionTitle,
@@ -25,7 +26,16 @@ const COLUMNS: { key: SortKey; label: string; width: string }[] = [
   { key: "last_ts", label: "fecha", width: "w-24" },
 ];
 
-export function Sessions({ scope }: { scope: Scope }) {
+export function Sessions({
+  scope,
+  focusSessionId,
+  onFocusHandled,
+}: {
+  scope: Scope;
+  /// Sesion que el popover pidio abrir; puede no estar en el recorte actual.
+  focusSessionId?: string | null;
+  onFocusHandled?: () => void;
+}) {
   const [sort, setSort] = useState<SortKey>("cost_usd");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<SessionRow | null>(null);
@@ -33,6 +43,21 @@ export function Sessions({ scope }: { scope: Scope }) {
     () => api.sessions(buildFilter(scope.period, scope.account)),
     [scope.period, scope.account],
   );
+
+  // La sesion pedida se busca por id y no en `rows`: una sesion viva puede
+  // quedar fuera del filtro de periodo y el click del popover fallaria justo
+  // cuando mas sirve.
+  useEffect(() => {
+    if (!focusSessionId) return;
+    let live = true;
+    void api.sessionRow(focusSessionId).then((row) => {
+      if (live && row) setSelected(row);
+      onFocusHandled?.();
+    });
+    return () => {
+      live = false;
+    };
+  }, [focusSessionId, onFocusHandled]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -125,7 +150,7 @@ export function Sessions({ scope }: { scope: Scope }) {
                     <td className="num px-2 py-1.5 text-right text-ink-faint">
                       {money(r.cost_per_turn)}
                     </td>
-                    <td className="num px-2 py-1.5 text-right text-ink-dim">{r.turns}</td>
+                    <td className="num px-2 py-1.5 text-right text-ink-dim">{count(r.turns)}</td>
                     <td className={cn("num px-2 py-1.5 text-right", toneClass[tone])}>
                       {tokens(r.max_ctx)}
                     </td>

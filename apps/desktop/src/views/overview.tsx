@@ -19,7 +19,7 @@ import {
   type SubagentSplit,
 } from "@/lib/api";
 import { Badge, Meter, Panel, PanelHead, Stat } from "@/components/ui/primitives";
-import { ago, limitTone, money, pct, resetState, toneClass } from "@/lib/format";
+import { ago, count, limitTone, money, pct, resetState, toneClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ChartFrame, fmt, tooltipStyle } from "@/components/ui/chart-frame";
 
@@ -264,80 +264,130 @@ export function Overview({ data }: { data: OverviewData }) {
  * dia de aca al cierre.
  */
 function MonthBudgetPanel({ pace }: { pace: MonthPace }) {
-  const { budget_usd: budget, spent_usd: spent, projected_usd: projected } = pace;
-  if (!budget) {
+  // Filtrar por una cuenta de tarifa plana no puede cambiar tu factura. Antes
+  // el panel seguia mostrando el techo de cruisebound y parecia que el filtro
+  // no funcionaba; decir por que es mas util que fingir un numero.
+  if (pace.scoped_flat_account) {
     return (
       <Panel>
-        <PanelHead title={`Mes ${pace.month}`} />
+        <PanelHead
+          title={`${pace.scoped_flat_account} · tarifa plana`}
+          right={
+            <span className="text-[10px] text-ink-faint">
+              no entra en el techo
+            </span>
+          }
+        />
         <div className="grid grid-cols-3 divide-x divide-line">
-          <Stat label="Facturado en el mes" value={money(spent)} />
+          <Stat label="Consumo de hoy" value={money(pace.today.spent_usd)} />
+          <Stat label="Consumo de la semana" value={money(pace.week.spent_usd)} />
           <Stat
-            label="Proyeccion al cierre"
-            value={money(projected, { compact: true })}
-            sub={`al ritmo de los primeros ${pace.day} dias`}
-          />
-          <Stat
-            label="Techo mensual"
-            value="sin definir"
-            sub="ponelo en Alertas → Presupuesto"
+            label={`Consumo de ${pace.month}`}
+            value={money(pace.spent_usd)}
+            sub="valor de API, no se factura"
           />
         </div>
       </Panel>
     );
   }
 
-  const share = spent / budget;
-  const projShare = projected / budget;
-  const tone = share >= 1 ? "text-crit" : share >= 0.75 ? "text-warn" : undefined;
-  const left = budget - spent;
+  const { budget_usd: budget, spent_usd: spent, projected_usd: projected } = pace;
+  const daysLeft = Math.max(pace.days_in_month - pace.day, 1);
 
   return (
     <Panel>
       <PanelHead
-        title={`Mes ${pace.month} · techo ${money(budget)}`}
-        right={
-          <span className={cn("num text-[11px] font-semibold", tone)}>
-            {(share * 100).toFixed(0)}%
-          </span>
-        }
+        title="Como vamos"
+        right={<span className="text-[10px] text-ink-faint">solo cuentas con overage</span>}
       />
-      <div className="space-y-2 px-3.5 pb-3 pt-2.5">
-        <Meter value={Math.min(share * 100, 100)} tone={share >= 1 ? "crit" : share >= 0.75 ? "warn" : "ok"} />
-        <div className="flex justify-between text-[10px] text-ink-faint">
-          <span>
-            dia {pace.day} de {pace.days_in_month}
-          </span>
-          <span>
-            {left >= 0
-              ? `${money(left)} disponibles`
-              : `${money(-left)} por encima del techo`}
-          </span>
+      <div className="grid grid-cols-3 divide-x divide-line">
+        <BudgetMeter
+          label="Hoy"
+          spent={pace.today.spent_usd}
+          budget={pace.today.budget_usd}
+          foot={`corte a las ${pace.today.elapsed_label}`}
+        />
+        <BudgetMeter
+          label="Esta semana"
+          spent={pace.week.spent_usd}
+          budget={pace.week.budget_usd}
+          foot={pace.week.elapsed_label}
+        />
+        <BudgetMeter
+          label={`Mes ${pace.month}`}
+          spent={spent}
+          budget={budget}
+          foot={`dia ${pace.day} de ${pace.days_in_month}`}
+        />
+      </div>
+      {budget ? (
+        <div className="grid grid-cols-2 divide-x divide-line border-t border-line">
+          <Stat
+            label="Proyeccion al cierre del mes"
+            value={money(projected, { compact: true })}
+            tone={projected >= budget ? "text-crit" : undefined}
+            sub={`${((projected / budget) * 100).toFixed(0)}% del techo al ritmo actual`}
+          />
+          <Stat
+            label="Podes gastar por dia"
+            value={money(pace.daily_allowance_usd ?? 0)}
+            tone={pace.daily_allowance_usd === 0 ? "text-crit" : undefined}
+            sub={
+              pace.daily_allowance_usd === 0
+                ? "el techo del mes ya se paso"
+                : `en los ${daysLeft} dias que quedan`
+            }
+          />
         </div>
-      </div>
-      <div className="grid grid-cols-3 divide-x divide-line border-t border-line">
-        <Stat label="Facturado en el mes" value={money(spent)} tone={tone} />
-        <Stat
-          label="Proyeccion al cierre"
-          value={money(projected, { compact: true })}
-          tone={projShare >= 1 ? "text-crit" : undefined}
-          sub={`${(projShare * 100).toFixed(0)}% del techo al ritmo actual`}
-        />
-        <Stat
-          label="Podes gastar por dia"
-          value={
-            pace.daily_allowance_usd === null
-              ? "—"
-              : money(pace.daily_allowance_usd)
-          }
-          tone={pace.daily_allowance_usd === 0 ? "text-crit" : undefined}
-          sub={
-            pace.daily_allowance_usd === 0
-              ? "el techo ya se paso"
-              : `en los ${Math.max(pace.days_in_month - pace.day, 1)} dias que quedan`
-          }
-        />
-      </div>
+      ) : null}
     </Panel>
+  );
+}
+
+/** Un periodo contra su techo: cuanto va, cuanto falta y de que color. */
+function BudgetMeter({
+  label,
+  spent,
+  budget,
+  foot,
+}: {
+  label: string;
+  spent: number;
+  budget: number | null;
+  foot: string;
+}) {
+  if (!budget) {
+    return (
+      <div className="px-3.5 py-3">
+        <div className="text-[10px] uppercase tracking-wider text-ink-faint">{label}</div>
+        <div className="num mt-1 text-xl font-semibold">{money(spent)}</div>
+        <div className="mt-1 text-[10px] text-ink-faint">sin techo definido</div>
+      </div>
+    );
+  }
+  const share = spent / budget;
+  const tone = limitTone(share * 100);
+  const left = budget - spent;
+  return (
+    <div className="space-y-1.5 px-3.5 py-3">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10px] uppercase tracking-wider text-ink-faint">{label}</span>
+        <span className={cn("num text-[11px] font-semibold", toneClass[tone])}>
+          {(share * 100).toFixed(0)}%
+        </span>
+      </div>
+      <div className="num text-xl font-semibold">
+        {money(spent)}
+        <span className="text-[11px] font-normal text-ink-faint"> de {money(budget)}</span>
+      </div>
+      <Meter value={Math.min(share * 100, 100)} tone={tone} />
+      <div className="flex justify-between text-[10px] text-ink-faint">
+        <span>{foot}</span>
+        <span className={cn(left < 0 && toneClass.crit)}>
+          {left >= 0 ? `${money(left)} libres` : `${money(-left)} pasado`}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -368,11 +418,11 @@ function SubagentPanel({ split }: { split: SubagentSplit }) {
           tone={share > 0.1 ? "text-warn" : undefined}
           sub={`${(share * 100).toFixed(1)}% del gasto del periodo`}
         />
-        <Stat label="Turnos" value={split.turns.toLocaleString("es")} />
-        <Stat label="Agentes lanzados" value={split.agents.toLocaleString("es")} />
+        <Stat label="Turnos" value={count(split.turns)} />
+        <Stat label="Agentes lanzados" value={count(split.agents)} />
         <Stat
           label="Sesiones que los usan"
-          value={split.sessions}
+          value={count(split.sessions)}
           sub="mira la columna sub en Sesiones"
         />
       </div>

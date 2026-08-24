@@ -6,7 +6,7 @@ import type { Scope } from "@/components/ui/filter-bar";
 import { useAsyncData } from "@/hooks/use-async-data";
 import { Empty, Panel, PanelHead, Stat } from "@/components/ui/primitives";
 import { ChartFrame, fmt, tooltipStyle } from "@/components/ui/chart-frame";
-import { money, pct, tokens } from "@/lib/format";
+import { count, money, pct, tokens } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type Rate = { id: string; label: string; input: number; output: number };
@@ -40,9 +40,9 @@ export function Models({ scope }: { scope: Scope }) {
 
   const histData = useMemo(
     () =>
-      (hist ?? []).map(([bucket, count]) => ({
+      (hist ?? []).map(([bucket, requests]) => ({
         label: bucket >= 10 ? ">1M" : `${bucket * 100}k`,
-        count,
+        count: requests,
         bucket,
       })),
     [hist],
@@ -75,7 +75,7 @@ export function Models({ scope }: { scope: Scope }) {
             label="Requests sobre 200k de contexto"
             value={pct(heavy, histTotal)}
             tone={heavy / (histTotal || 1) > 0.5 ? "text-crit" : "text-warn"}
-            sub={`${heavy.toLocaleString("es")} de ${histTotal.toLocaleString("es")}`}
+            sub={`${count(heavy)} de ${count(histTotal)}`}
           />
         </Panel>
       </div>
@@ -139,7 +139,7 @@ export function Models({ scope }: { scope: Scope }) {
               <Tooltip
                 {...tooltipStyle}
                 cursor={{ fill: "var(--color-panel-2)" }}
-                formatter={fmt((v) => [v.toLocaleString("es"), "requests"])}
+                formatter={fmt((v) => [count(v), "requests"])}
               />
               <Bar dataKey="count" radius={[3, 3, 0, 0]}>
                 {histData.map((r) => (
@@ -193,7 +193,7 @@ export function Models({ scope }: { scope: Scope }) {
                       {rate ? `${rate.input} · ${rate.output}` : "—"}
                     </td>
                     <td className="num px-3 py-1.5 text-right text-ink-dim">
-                      {r.turns.toLocaleString("es")}
+                      {count(r.turns)}
                     </td>
                     <td className="num px-3 py-1.5 text-right text-ink-dim">
                       {tokens(r.out_tok)}

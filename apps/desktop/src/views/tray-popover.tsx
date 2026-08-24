@@ -217,10 +217,21 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function LiveRow({
   session,
 }: {
-  session: { name: string | null; cwd: string; status: string | null; account: string };
+  session: {
+    session_id: string;
+    name: string | null;
+    cwd: string;
+    status: string | null;
+    account: string;
+  };
 }) {
   return (
-    <div className="rounded-md border border-line bg-panel-2/60 px-2.5 py-2">
+    <button
+      type="button"
+      onClick={() => void api.openSession(session.session_id)}
+      title="abrir el detalle de esta sesion"
+      className="w-full rounded-md border border-line bg-panel-2/60 px-2.5 py-2 text-left transition-colors hover:border-ink-faint hover:bg-panel-2"
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-[11px] font-medium">
           {session.name ?? session.cwd.split("/").pop()}
@@ -232,7 +243,7 @@ function LiveRow({
       <div className="mt-0.5 truncate text-[10px] text-ink-faint">
         {session.account} · {session.cwd.split("/").slice(-2).join("/")}
       </div>
-    </div>
+    </button>
   );
 }
 

@@ -34,6 +34,9 @@ function MainWindow() {
   const [tab, setTab] = useState<Tab>("overview");
   const [busy, setBusy] = useState(false);
   const [scope, setScope] = useState<Scope>({ period: "30" as PeriodId, account: null });
+  // Sesion que el popover pidio abrir. Se limpia al cerrarse el detalle para
+  // que volver a clickear la misma sesion la reabra.
+  const [focusSession, setFocusSession] = useState<string | null>(null);
   const filter = buildFilter(scope.period, scope.account);
   const { data, reload } = useAsyncData(
     () => api.overview(filter),
@@ -46,6 +49,14 @@ function MainWindow() {
     const un = listen("burn://refreshed", reload);
     return () => void un.then((f) => f());
   }, [reload]);
+
+  useEffect(() => {
+    const un = listen<string>("burn://open-session", (e) => {
+      setTab("sessions");
+      setFocusSession(e.payload);
+    });
+    return () => void un.then((f) => f());
+  }, []);
 
   const refresh = async () => {
     setBusy(true);
@@ -105,7 +116,11 @@ function MainWindow() {
               <Empty>leyendo transcripts…</Empty>
             )
           ) : tab === "sessions" ? (
-            <Sessions scope={scope} />
+            <Sessions
+              scope={scope}
+              focusSessionId={focusSession}
+              onFocusHandled={() => setFocusSession(null)}
+            />
           ) : tab === "models" ? (
             <Models scope={scope} />
           ) : (

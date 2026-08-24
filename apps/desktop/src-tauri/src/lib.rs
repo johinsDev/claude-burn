@@ -41,6 +41,8 @@ pub fn run() {
             commands::context_histogram,
             commands::budgets,
             commands::set_budget,
+            commands::open_session,
+            commands::session_row,
             commands::show_main_window,
             commands::hide_main_window,
             commands::alert_config,
