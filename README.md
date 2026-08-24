@@ -1,47 +1,49 @@
 # claude-burn
 
-Mide el gasto de Claude Code: por sesión, por modelo, por proyecto, con las
-cuentas separadas. Vive en la barra de menú de macOS y avisa **antes** de que
-una sesión se infle, no después de que llegue la factura.
+Track what Claude Code actually costs you — per session, per model, per
+project, with each account kept separate. It lives in the macOS menu bar, warns
+you **before** a session balloons, and can block the next prompt once you've
+blown your budget.
 
-**Todo local. La app no hace ninguna petición de red** — ni a la API de
-Anthropic ni a nada. Solo lee archivos que Claude Code ya escribe en disco, y
-nunca toca `.credentials.json`. Esto importa porque los transcripts contienen
-tu código fuente.
+**Fully local. The app makes zero network requests** — not to Anthropic's API,
+not to anything. It only reads files Claude Code already writes to disk, and it
+never touches `.credentials.json`. That matters, because your transcripts
+contain your source code.
 
-<!-- CAPTURAS -->
+<!-- SCREENSHOTS -->
 
-## Por qué
+## Why
 
-Medir el gasto real de dos meses de uso dio esto:
+Measuring two months of real usage produced this breakdown:
 
-| Componente | % del gasto |
+| Component | Share of spend |
 |---|---|
-| `cache_read` — releer el contexto en cada turno | **67%** |
+| `cache_read` — re-reading context on every turn | **67%** |
 | `cache_write` | 24% |
-| `output` — lo que Claude realmente escribe | 7,6% |
-| `input` fresco | 0,03% |
+| `output` — what Claude actually writes | 7.6% |
+| fresh `input` | 0.03% |
 
-**Dos tercios de la factura no son trabajo, son arrastrar contexto.** Las
-herramientas existentes dan totales; esta muestra *en qué sesión* y *en qué
-turno* se fue la plata, y te corta antes de que siga.
+**Two thirds of the bill isn't work — it's dragging context around.** Existing
+tools give you totals. This one shows you *which session* and *which turn* the
+money went to, and stops you before it keeps going.
 
-Tres detalles que cambian el número y que otras herramientas no ven:
+Three things that change the number, which other tools miss:
 
-- **Los subagentes se facturan aparte.** Sus turnos no están en el transcript
-  de la sesión sino en `<sesión>/subagents/agent-*.jsonl`. Una herramienta que
-  mira solo el nivel de arriba los ignora. En una medición real eran 304
-  agentes y $385.
-- **Reanudar una sesión reescribe las líneas previas** en un archivo nuevo. Sin
-  deduplicar por `requestId` el gasto se cuenta varias veces — eran 33.241
-  duplicados sobre 35.000 turnos.
-- **Una suscripción con overage deshabilitado no te cobra por token.** Sumar
-  esas cuentas al total infla la factura con plata que nadie te cobra.
-  claude-burn las marca con `≈` y las excluye de los techos.
+- **Subagents are billed separately.** Their turns don't live in the session
+  transcript but in `<session>/subagents/agent-*.jsonl`. Anything that only
+  looks at the top level ignores them. In one real measurement that was 304
+  agents and $385.
+- **Resuming a session replays earlier lines** into a new file. Without
+  deduplicating on `requestId` the spend is counted several times — 33,241
+  duplicates across 35,000 turns.
+- **A subscription with overage disabled doesn't bill per token.** Adding those
+  accounts to the total inflates your bill with money nobody charges you.
+  claude-burn marks them with `≈` and excludes them from every budget.
 
-## Instalar
+## Install
 
-Requiere [Rust](https://rustup.rs), Node 20+ y pnpm.
+Requires [Rust](https://rustup.rs), Node 20+ and pnpm. macOS only for now
+(the menu bar and notification bits are AppKit-specific; the core is portable).
 
 ```bash
 pnpm install
@@ -49,201 +51,246 @@ pnpm --filter @claude-burn/desktop bundle
 open target/release/bundle/dmg/claude-burn_0.1.0_aarch64.dmg
 ```
 
-El bundle no está firmado: la primera vez, click derecho → Abrir.
+The bundle isn't signed, so the first launch needs right click → Open.
 
-El toggle de arranque automático está en **Alertas**. Sin él la app no corre, y
-las alertas de contexto no sirven de nada porque solo tienen sentido mientras
-la sesión sigue abierta.
+The autostart toggle lives under **Alertas**. Without it the app isn't running,
+and context alerts are worthless — they only mean anything while the session is
+still open.
 
-## Cuentas
+## Try it without your own data
 
-Se descubren solas las carpetas `~/.claude*` que tengan un `projects/` adentro.
-Si tenés tus config dirs en otro lado, **Ajustes → Cuentas** deja agregarlos a
-mano, ocultarlos o quitarlos del escaneo. Nada de eso borra datos.
+```bash
+pnpm --filter @claude-burn/desktop demo
+```
 
-Cada cuenta se clasifica leyendo `hasExtraUsageEnabled` de su `.claude.json`:
+Seeds a database of invented accounts, projects and sessions, then opens the
+app against it. A demo database is flagged in `settings` and is never synced,
+so it can't get contaminated with your real transcripts.
 
-| | qué significa |
+## Accounts
+
+Any `~/.claude*` directory with a `projects/` folder inside is discovered
+automatically. If your config dirs live somewhere else, **Ajustes → Cuentas**
+lets you add, hide or remove them. None of that deletes data.
+
+Each account is classified by reading `hasExtraUsageEnabled` from its
+`.claude.json`:
+
+| | what it means |
 |---|---|
-| **overage** | cada token por encima del plan se factura. Es plata real. |
-| **tarifa plana** | suscripción con overage deshabilitado. El `$` es valor de API, no factura. Se muestra con `≈`. |
-| **desconocida** | no hay sesión iniciada en ese config dir. No se adivina. |
+| **overage** | every token past the plan is billed. Real money. |
+| **flat rate** | subscription with overage disabled. The `$` is API value, not an invoice. Shown with `≈`. |
+| **unknown** | no session signed in for that config dir. Nothing is guessed. |
 
-**Los techos y los totales de la portada solo cuentan las cuentas con
-overage.** Filtrar por una cuenta de tarifa plana no puede cambiar tu factura,
-así que la app lo dice en vez de mostrar un número de otra cuenta.
+**Budgets and the headline totals only count overage accounts.** Filtering by a
+flat-rate account can't change your bill, so the app says so instead of showing
+you a number from a different account.
 
-## Techos
+## Budgets
 
-**Alertas → Presupuesto** define los techos por día, semana y mes. La semana
-arranca el lunes y el mes es calendario, igual que factura Anthropic: una
-ventana móvil de 30 días nunca vuelve a cero, así que no sirve como techo.
+**Alertas → Presupuesto** sets daily, weekly and monthly caps. The week starts
+on Monday and the month is a calendar month, the same way Anthropic bills: a
+rolling 30-day window never resets, so it can't work as a cap.
 
-El panel **Cómo vamos** muestra los tres a la vez, más la proyección al cierre
-del mes y cuánto podés gastar por día en los que quedan.
+The **Cómo vamos** panel shows all three at once, plus the projected month-end
+total and how much you can still spend per day for the days that remain.
 
-## Bloqueo
+## The block
 
-Un hook `UserPromptSubmit` que **corta el turno antes de mandarlo** cuando ya
-te pasaste. Es lo único del sistema que frena en vez de avisar.
+A `UserPromptSubmit` hook that **cuts the turn before it's sent** once you're
+over. It's the only part of the system that stops you instead of telling you.
 
-Los scripts están en [`hooks/`](hooks/). Copialos a tu config dir y conectalos:
+The scripts live in [`hooks/`](hooks/). Copy them into your config dir and wire
+them up:
 
 ```jsonc
 // ~/.claude/settings.json
 {
   "statusLine": {
     "type": "command",
-    "command": "/Users/TU-USUARIO/.claude/hooks/statusline.sh",
+    "command": "/Users/YOU/.claude/hooks/statusline.sh",
     "refreshInterval": 30
   },
   "hooks": {
     "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "/Users/TU-USUARIO/.claude/hooks/budget-guard.sh", "timeout": 15 }] }
+      { "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/budget-guard.sh", "timeout": 15 }] }
     ],
     "SessionStart": [
-      { "hooks": [{ "type": "command", "command": "/Users/TU-USUARIO/.claude/hooks/session-start-budget-warn.sh", "timeout": 15 }] }
+      { "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/session-start-budget-warn.sh", "timeout": 15 }] }
     ]
   }
 }
 ```
 
-Necesitan `burn-cli` en `~/.local/bin`:
+They need `burn-cli` on disk:
 
 ```bash
 cargo build --release -p burn-core --bin burn-cli
 cp target/release/burn-cli ~/.local/bin/
 ```
 
-Se prende y se elige qué techos hace cumplir desde **Ajustes → Bloqueo**, no
-editando shell. Eso es a propósito: **cuando el bloqueo está activo, el mensaje
-con el que le pedirías a Claude que lo desbloquee también queda bloqueado.**
-Tiene que haber una salida fuera del chat.
+You turn it on and pick which caps it enforces from **Ajustes → Bloqueo**, not
+by editing shell. That's deliberate: **while the block is active, the message
+you'd use to ask Claude to unblock it gets blocked too.** The way out can't be
+inside the chat.
 
-No es un tope a prueba de balas: corta el *próximo* prompt una vez que detecta
-que ya te pasaste. No puede devolver lo que ya se gastó.
+It is not a hard cap. It stops the *next* prompt once it notices you're over —
+it can't claw back what's already spent.
 
-Los hooks leen de la base con `burn-cli status` (~17 ms) en vez de llamar a
-`npx ccusage` en cada prompt. Además de ser 100× más rápido, cuenta los
-subagentes y respeta el techo configurado en la app.
+The hooks read from the database via `burn-cli status` (~17 ms) instead of
+shelling out to `npx ccusage` on every prompt. Beyond being 100× faster, it
+counts subagents and respects the cap configured in the app.
 
-## Las cuatro alertas
+## The four alerts
 
-| Alerta | Cuándo |
+| Alert | Fires when |
 |---|---|
-| Presupuesto | El gasto **facturable** del día/semana/mes cruza 50/75/90/100% del techo |
-| Contexto inflado | Una sesión **viva** pasa 250k (aviso) o 500k (crítico) de contexto |
-| Límite del plan | Un límite activo de `cachedUsageUtilization` pasa 75% o 90% |
-| Modelo caro | Un modelo de tarifa premium se lleva más de la mitad del día |
+| Budget | **Billable** spend for the day/week/month crosses 50/75/90/100% of the cap |
+| Context bloat | A **live** session passes 250k (warn) or 500k (critical) tokens of context |
+| Plan limit | An active limit from `cachedUsageUtilization` passes 75% or 90% |
+| Expensive model | A premium-rate model takes more than half the day's spend |
 
-El cooldown va por `(tipo, clave)` y la clave incluye el escalón alcanzado:
-subir de 75% a 90% notifica de nuevo, pero quedarse en 78% no repite.
+Cooldown is keyed on `(kind, key)`, and the key includes the step reached:
+going from 75% to 90% notifies again, sitting at 78% doesn't repeat.
 
-"Caro" no es una lista fija de modelos: es cualquiera cuyo precio de salida
-supere al de Opus 5, leído de la misma tabla de precios. Cuando salga un modelo
-nuevo, la regla ya lo cubre.
+"Expensive" is not a hardcoded model list — it's any model whose output price
+exceeds Opus 5's, read from the same pricing table. When a new model ships, the
+rule already covers it.
 
 ## CLI
 
-Filtros combinables con cualquier comando: `--account <nombre>` y `--days <n>`.
+Filters compose with any command: `--account <name>` and `--days <n>`.
 
 ```bash
-burn-cli report          # todo
-burn-cli months          # gasto por mes y cuenta
-burn-cli composition     # en qué se va la plata
-burn-cli sessions 20     # sesiones más caras, con su título
-burn-cli session <id>    # contexto y costo turno a turno
-burn-cli agents          # cuánto se van los subagentes y quién los lanza
-burn-cli context         # requests por tamaño de contexto
-burn-cli plan            # límites del plan y sesiones vivas
-burn-cli status          # techos y gasto en JSON, para los hooks
+burn-cli report          # everything
+burn-cli months          # spend by month and account
+burn-cli composition     # where the money goes
+burn-cli sessions 20     # priciest sessions, with their titles
+burn-cli session <id>    # context and cost, turn by turn
+burn-cli agents          # what subagents cost and who spawns them
+burn-cli context         # requests bucketed by context size
+burn-cli plan            # plan limits and live sessions
+burn-cli status          # caps and spend as JSON, for the hooks
+burn-cli demo            # seed a database of invented data
 ```
 
 ```bash
-burn-cli models --account trabajo --days 7
+burn-cli models --account work --days 7
 ```
 
-`BURN_DB=/ruta/burn.sqlite` cambia la base; por defecto va al data dir del SO.
+`BURN_DB=/path/burn.sqlite` points at a different database; the default lives
+in the OS data dir.
 
-El histórico arranca donde arrancan los transcripts: Claude Code poda los
-viejos, así que "todo" son las últimas semanas, no desde siempre. La app
-muestra el rango exacto al lado del filtro.
+History starts where the transcripts start: Claude Code prunes old ones, so
+"all time" means the last few weeks, not forever. The app shows the exact range
+next to the filter.
 
-## De dónde salen los datos
-
-| Fuente | Qué aporta |
-|---|---|
-| `<config>/projects/**/*.jsonl` | turnos facturados: modelo, tokens, contexto, effort |
-| `<config>/projects/**/ai-title` | de qué trata cada sesión |
-| `<config>/.claude.json` | cuenta, tipo de facturación, `cachedUsageUtilization` (límites oficiales) |
-| `<config>/sessions/<pid>.json` | sesiones corriendo ahora mismo |
-
-Los transcripts vienen en tres formas, y perderse las dos últimas subestima el
-gasto:
+## Architecture
 
 ```
-<proyecto>/<uuid>.jsonl                               sesión principal
-<proyecto>/<uuid>/subagents/agent-<id>.jsonl          subagente
-<proyecto>/<uuid>/subagents/workflows/wf_*/*.jsonl    agente de workflow
-```
+crates/burn-core/          ingest · dedup · pricing · SQLite · alert rules
+  ├── ingest.rs            incremental JSONL reader, offset per file
+  ├── record.rs            transcript line shapes (serde)
+  ├── pricing.rs           cost engine, pricing.json embedded via include_str!
+  ├── store.rs             schema and every query
+  ├── profiles.rs          account discovery, plan limits, live sessions
+  ├── alerts.rs            pure rules, no I/O
+  ├── demo.rs              invented dataset
+  └── bin/burn-cli.rs      the same engine on the command line
 
-## Motor de costo
-
-```
-costo = in·base + w5m·base·1,25 + w1h·base·2 + read·base·0,1 + out·salida
-```
-
-Más los multiplicadores: `speed: "fast"` cobra tarifa premium donde exista,
-`inference_geo: "us"` es ×1,1, `service_tier: "batch"` es ×0,5, y las búsquedas
-web van a $10 por mil.
-
-`packages/pricing/pricing.json` es la fuente única, consumida por TypeScript y
-embebida en el binario de Rust con `include_str!`. **Un modelo que no esté en
-la tabla cuenta 0 y se marca en la UI** — nunca se adivina un precio.
-
-## Cómo se mantiene al día
-
-Un watcher (`notify`) vigila `projects/` en recursivo, `sessions/` y
-`.claude.json` de cada cuenta. Debounce de 900 ms — Claude escribe muchas
-líneas seguidas y sincronizar en cada una lee JSON a medio escribir. El offset
-solo avanza sobre líneas terminadas en `\n`, así que una línea a medio escribir
-espera a la próxima pasada en vez de perderse.
-
-Cada 90 s revisa igual aunque nada se mueva, porque los límites del plan se
-refrescan en `.claude.json` sin tocar ningún transcript.
-
-Ingesta en frío: **1,1 GB en 435 archivos, ~1 s**. Incremental: ~10 ms.
-
-## Limpieza
-
-**Ajustes → Limpiar transcripts de subagente** borra por antigüedad. Es seguro
-para los números: los turnos ya están deduplicados en SQLite y todas las
-consultas salen de ahí. Lo único que se pierde es poder hacer `--resume` de
-esas ramas.
-
-## Arquitectura
-
-```
-crates/burn-core/     ingesta · dedup · precios · SQLite · alertas   (sin Tauri)
-  └── bin/burn-cli    el mismo motor por línea de comandos
 apps/desktop/
-  ├── src-tauri/      tray, ventana, watcher, notificaciones
-  └── src/            React 19 + Tailwind v4 + Recharts
-packages/pricing/     pricing.json — fuente única de precios
-hooks/                los scripts del bloqueo y el statusline
+  ├── src-tauri/
+  │   ├── commands.rs      the bridge the frontend calls
+  │   ├── watcher.rs       notify-based file watching, 900 ms debounce
+  │   ├── tray.rs          menu bar icon and popover positioning
+  │   ├── alerts.rs        rules → native notifications, with cooldown
+  │   └── state.rs         shared state, tray summary
+  └── src/                 React: overview, sessions, models, alerts, settings
+
+packages/pricing/          pricing.json — single source of prices
+hooks/                     the block and statusline scripts
 ```
 
-`burn-core` no depende de Tauri a propósito: se compila como CLI, que es como
-se verifican los números sin abrir la GUI.
+**`burn-core` deliberately does not depend on Tauri.** It compiles as a CLI,
+which is how the numbers get verified without opening the GUI — and it's what
+makes the whole cost engine testable with 35 unit tests and no windowing.
 
-## Desarrollo
+### Data sources
+
+| Source | What it gives |
+|---|---|
+| `<config>/projects/**/*.jsonl` | billed turns: model, tokens, context, effort |
+| `ai-title` lines | what each session is about |
+| `<config>/.claude.json` | account, billing type, `cachedUsageUtilization` (official limits) |
+| `<config>/sessions/<pid>.json` | sessions running right now |
+
+Transcripts come in three shapes, and missing the last two underestimates your
+spend:
+
+```
+<project>/<uuid>.jsonl                                main session
+<project>/<uuid>/subagents/agent-<id>.jsonl           subagent
+<project>/<uuid>/subagents/workflows/wf_*/*.jsonl     workflow agent
+```
+
+### Cost engine
+
+```
+cost = in·base + w5m·base·1.25 + w1h·base·2 + read·base·0.1 + out·output_rate
+```
+
+Plus the multipliers: `speed: "fast"` bills the premium rate where one exists,
+`inference_geo: "us"` is ×1.1, `service_tier: "batch"` is ×0.5, and web
+searches are $10 per thousand.
+
+`packages/pricing/pricing.json` is the single source, consumed by TypeScript
+and embedded in the Rust binary with `include_str!`. **A model that isn't in
+the table costs 0 and is flagged in the UI** — a price is never guessed.
+
+### Staying current
+
+A `notify` watcher tracks `projects/` recursively, plus `sessions/` and
+`.claude.json` for each account. 900 ms debounce — Claude writes many lines in
+a burst, and syncing on each one reads half-written JSON. The offset only
+advances past lines ending in `\n`, so a line being written right now waits for
+the next pass instead of getting mangled.
+
+Every 90 s it checks anyway, because plan limits refresh inside `.claude.json`
+without touching any transcript.
+
+Cold ingest: **1.1 GB across 435 files in ~1 s**. Incremental: ~10 ms.
+
+Deduplication is a `UNIQUE` constraint on `request_id` with `INSERT OR IGNORE`,
+which also encodes the attribution rule: a repeated request belongs to the
+first session that produced it.
+
+## Stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Monorepo | Turborepo + pnpm | shared pricing package between Rust and TS |
+| Shell | Tauri v2 | native tray, ~10 MB bundle, Rust backend |
+| Frontend | React 19 · Vite 7 · Tailwind v4 · Recharts 3 | |
+| Backend | Rust — `rusqlite` (bundled), `notify`, `memchr`, `walkdir`, `chrono` | `memchr` pre-filters lines before `serde_json` touches them |
+| Plugins | `notification`, `autostart`, `single-instance`, `opener` | |
+| Lint | oxlint · clippy · rustfmt | |
+
+## Cleanup
+
+**Ajustes → Limpiar transcripts de subagente** deletes by age. It's safe for
+the numbers: turns are already deduplicated in SQLite and every query reads
+from there. The only thing you lose is `--resume` on those branches.
+
+## Development
 
 ```bash
-pnpm dev                                  # Tauri en modo dev
+pnpm dev                                  # Tauri in dev mode
 pnpm turbo lint typecheck build           # frontend
 cargo test && cargo clippy -- -D warnings # Rust
 ```
 
-## Licencia
+Note: code comments and the UI are in Spanish.
+
+## License
 
 MIT

@@ -76,7 +76,23 @@ fn main() -> Result<()> {
         .unwrap_or_else(|_| burn_core::default_db_path());
     let mut db = Store::open(&db_path)?;
 
-    let (profs, rep) = sync_default(&mut db)?;
+    // La base de demo no se sincroniza: se llenaria con los transcripts
+    // reales de la maquina y dejaria de servir para capturas.
+    if cmd == "demo" {
+        burn_core::demo::seed(&mut db)?;
+        println!("base de demo lista en {}", db_path.display());
+        println!("  BURN_DEMO=1 BURN_DB={} pnpm dev", db_path.display());
+        return Ok(());
+    }
+
+    // Una base marcada como demo nunca se sincroniza: la primera pasada la
+    // llenaria con los transcripts reales de la maquina y dejaria de servir.
+    let is_demo = db.get_setting(burn_core::demo::DEMO_KEY)?.is_some();
+    let (profs, rep) = if is_demo {
+        (burn_core::demo::profiles(&db)?, Default::default())
+    } else {
+        sync_default(&mut db)?
+    };
     if matches!(cmd, "sync" | "report") {
         println!("== ingesta ==");
         println!(

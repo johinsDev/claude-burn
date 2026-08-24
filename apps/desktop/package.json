@@ -11,7 +11,8 @@
     "app": "tauri dev",
     "bundle": "tauri build",
     "lint": "oxlint src",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "demo": "cargo run --release -p burn-core --bin burn-cli -- demo && BURN_DEMO=1 pnpm tauri dev"
   },
   "dependencies": {
     "@claude-burn/pricing": "workspace:*",

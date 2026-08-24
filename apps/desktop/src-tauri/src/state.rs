@@ -8,6 +8,8 @@ use std::sync::Mutex;
 
 pub struct AppState {
     pub db: Mutex<Store>,
+    /// `true` cuando la base es de demo: no se sincroniza ni se vigila disco.
+    pub demo: bool,
     pub profiles: Mutex<Vec<Profile>>,
 }
 
@@ -16,10 +18,24 @@ pub const PROFILES_KEY: &str = "profile_settings";
 
 impl AppState {
     pub fn new() -> Result<Self> {
-        let db = Store::open(&burn_core::default_db_path())?;
-        let profiles = burn_core::profiles::active(&read_profile_settings(&db))?;
+        // `BURN_DB` apunta a otra base: es lo que permite abrir la de demo sin
+        // tocar la real.
+        let path = std::env::var("BURN_DB")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| burn_core::default_db_path());
+        let db = Store::open(&path)?;
+        // Una base de demo trae sus propias cuentas y no se sincroniza: la
+        // primera pasada la llenaria con los transcripts reales de la maquina.
+        let demo = burn_core::demo::profiles(&db)?;
+        let is_demo = !demo.is_empty();
+        let profiles = if is_demo {
+            demo
+        } else {
+            burn_core::profiles::active(&read_profile_settings(&db))?
+        };
         Ok(Self {
             db: Mutex::new(db),
+            demo: is_demo,
             profiles: Mutex::new(profiles),
         })
     }
@@ -60,6 +76,9 @@ fn read_profile_settings(db: &Store) -> ProfileSettings {
 impl AppState {
     /// Sincroniza y devuelve cuantos turnos nuevos entraron.
     pub fn sync(&self) -> Result<usize> {
+        if self.demo {
+            return Ok(0);
+        }
         let profiles = self.profiles.lock().unwrap().clone();
         let mut db = self.db.lock().unwrap();
         Ok(burn_core::sync(&mut db, &profiles)?.turns_new)

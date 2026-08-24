@@ -1,22 +1,21 @@
 # hooks
 
-Scripts para conectar claude-burn a Claude Code. Copialos a tu config dir
-(por ejemplo `~/.claude/hooks/`) y conectalos en `settings.json` — ver el
-README principal.
+Scripts that wire claude-burn into Claude Code. Copy them into your config dir
+(e.g. `~/.claude/hooks/`) and reference them from `settings.json` — see the
+main README.
 
-| script | qué hace |
+| script | what it does |
 |---|---|
-| `burn.sh` | lee `burn-cli status`. Los otros tres se apoyan en este. |
-| `budget-guard.sh` | `UserPromptSubmit`: **corta el turno** si ya pasaste un techo |
-| `session-start-budget-warn.sh` | `SessionStart`: avisa si vas >80% del día o el mes está pasado |
-| `statusline.sh` | `statusLine`: `🤖 Opus 5 \| 💰 $22.38/$33 hoy (68%)` |
+| `burn.sh` | reads `burn-cli status`. The other three build on it. |
+| `budget-guard.sh` | `UserPromptSubmit`: **cuts the turn** if you're already over a cap |
+| `session-start-budget-warn.sh` | `SessionStart`: warns if you're past 80% of the day, or the month is over its cap |
+| `statusline.sh` | `statusLine`: `🤖 Opus 5 \| 💰 $22.38/$33 today (68%)` |
 
-Ninguno tiene configuración adentro: los techos y el interruptor del bloqueo
-salen de la app (**Ajustes → Bloqueo**, **Alertas → Presupuesto**). Es a
-propósito — cuando el bloqueo está activo, el mensaje con el que pedirías
-desbloquearlo también queda bloqueado, así que la salida no puede estar en el
-chat.
+None of them hold configuration. The caps and the block's on/off switch come
+from the app (**Ajustes → Bloqueo**, **Alertas → Presupuesto**). That's
+deliberate — while the block is active, the message you'd use to ask for it to
+be lifted gets blocked too, so the way out can't live in the chat.
 
-Requieren `jq` y `burn-cli` en `~/.local/bin` (o `BURN_CLI=/otra/ruta`).
-Si `burn-cli` no está, los hooks salen sin hacer nada en vez de romper la
-sesión.
+They need `jq`, and `burn-cli` on `~/.local/bin` (or set `BURN_CLI=/some/path`).
+If `burn-cli` isn't there the hooks exit quietly instead of breaking the
+session.

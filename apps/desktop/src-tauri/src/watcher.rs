@@ -21,6 +21,12 @@ const DEBOUNCE: Duration = Duration::from_millis(900);
 const IDLE_TICK: Duration = Duration::from_secs(90);
 
 pub fn spawn(app: AppHandle) {
+    // En modo demo no hay disco que vigilar: las cuentas son sinteticas y
+    // sincronizar traeria los transcripts reales de la maquina.
+    if app.state::<AppState>().demo {
+        return;
+    }
+
     std::thread::spawn(move || {
         if let Err(e) = run(app) {
             eprintln!("[claude-burn] watcher detenido: {e}");

@@ -3,6 +3,7 @@
 //! biblioteca para la app y como CLI (`burn-cli`) para verificar los numeros.
 
 pub mod alerts;
+pub mod demo;
 pub mod ingest;
 pub mod pricing;
 pub mod profiles;
