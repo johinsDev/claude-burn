@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>claude-burn — see where your Claude Code money goes</title>
+<meta name="description" content="Track what Claude Code actually costs, per session and per model. macOS menu bar app. Two thirds of a real bill was re-reading context. Fully local, zero network calls." />
+<meta property="og:title" content="claude-burn" />
+<meta property="og:description" content="Two thirds of your Claude Code bill isn't work — it's dragging context around. This shows you which session, and stops you before it keeps going." />
+<meta property="og:type" content="website" />
+<meta name="theme-color" content="#0b0d12" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🔥</text></svg>" />
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+
+<div class="glow" aria-hidden="true"></div>
+
+<header class="nav">
+  <a class="brand" href="#top">
+    <span class="brand-mark">◧</span>
+    <span>claude-burn</span>
+  </a>
+  <nav class="nav-links">
+    <a href="#why">Why</a>
+    <a href="#app">The app</a>
+    <a href="#block">The block</a>
+    <a href="https://github.com/johinsDev/claude-burn">GitHub</a>
+  </nav>
+  <a class="btn btn-solid btn-sm" href="https://github.com/johinsDev/claude-burn/releases/latest">Download</a>
+</header>
+
+<main id="top">
+
+<!-- ─────────────────────────  HERO  ───────────────────────── -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <p class="eyebrow">macOS menu bar · Apple Silicon · MIT</p>
+      <h1>
+        Two thirds of your Claude&nbsp;Code bill
+        <em>isn't work.</em>
+      </h1>
+      <p class="lede">
+        It's dragging context around — re-reading the same giant prompt every
+        turn. Other tools give you a total. <strong>claude-burn shows you which
+        session, which turn, and stops you before it keeps going.</strong>
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-solid" href="https://github.com/johinsDev/claude-burn/releases/latest">
+          Download&nbsp;.dmg <span class="btn-note">4.4&nbsp;MB</span>
+        </a>
+        <a class="btn" href="https://github.com/johinsDev/claude-burn">View source</a>
+      </div>
+      <p class="micro">
+        <span class="dot dot-ok"></span> Zero network requests. Reads only files
+        Claude&nbsp;Code already writes to disk.
+      </p>
+    </div>
+
+    <div class="hero-art">
+      <!-- menu bar -->
+      <div class="menubar">
+        <div class="menubar-items">
+          <span class="mb-pill"><span class="mb-icon"></span><span class="num">$21.8 · 66%</span></span>
+          <span class="mb-ghost"></span><span class="mb-ghost"></span><span class="mb-ghost"></span>
+        </div>
+      </div>
+
+      <!-- popover -->
+      <div class="popover">
+        <div class="pop-head">
+          <div><span class="num pop-money">$21.83</span> <span class="faint">today</span></div>
+          <div class="pop-actions"><span class="chip">Refresh</span><span class="chip chip-solid">Open</span></div>
+        </div>
+        <div class="pop-body">
+          <p class="faint tiny">+ $83.46 consumed on flat-rate accounts — API value, not billed</p>
+
+          <div class="meters">
+            <div class="meter">
+              <div class="meter-top"><span>Today · cap $33</span><b class="warn num">66%</b></div>
+              <div class="bar"><i style="width:66%;background:var(--warn)"></i></div>
+              <div class="meter-foot"><span class="num">$21.83 billed</span><span class="num">$11.17 left</span></div>
+            </div>
+            <div class="meter">
+              <div class="meter-top"><span>Week · cap $231</span><b class="ok num">9%</b></div>
+              <div class="bar"><i style="width:9%;background:var(--ok)"></i></div>
+              <div class="meter-foot"><span class="num">$21.83 billed</span><span class="num">$209 left · day 1 of 7</span></div>
+            </div>
+            <div class="meter">
+              <div class="meter-top"><span>Month · cap $1.000</span><b class="crit num">492%</b></div>
+              <div class="bar"><i style="width:100%;background:var(--crit)"></i></div>
+              <div class="meter-foot"><span class="num">$4.925 billed</span><span class="crit num">$3.925 over</span></div>
+            </div>
+          </div>
+
+          <div class="pop-section">Live sessions · 3</div>
+          <div class="live">
+            <div class="live-row">
+              <div><b>refactor-checkout</b><span class="faint tiny">work · shop-web</span></div>
+              <span class="tag tag-warn">busy</span>
+            </div>
+            <div class="live-row">
+              <div><b>oauth-migration</b><span class="faint tiny">work · shop-web</span></div>
+              <span class="tag">idle</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────  THE NUMBER  ───────────────────────── -->
+<section class="band" id="why">
+  <div class="wrap">
+    <h2 class="section-title">Where the money actually went</h2>
+    <p class="section-sub">
+      Measured across two months of real usage — 35,842 billed turns, priced at
+      list rates.
+    </p>
+
+    <div class="composition">
+      <div class="comp-bar">
+        <span style="width:67%;background:var(--crit)" title="cache_read 67%"></span>
+        <span style="width:24%;background:var(--hot)"  title="cache_write 24%"></span>
+        <span style="width:7.6%;background:var(--ok)"  title="output 7.6%"></span>
+        <span style="width:1.4%;background:var(--warn)" title="input"></span>
+      </div>
+      <ul class="comp-legend">
+        <li><i style="background:var(--crit)"></i><b class="num">67%</b> <span>cache_read — re-reading context every turn</span></li>
+        <li><i style="background:var(--hot)"></i><b class="num">24%</b> <span>cache_write</span></li>
+        <li><i style="background:var(--ok)"></i><b class="num">7.6%</b> <span>output — what Claude actually writes</span></li>
+        <li><i style="background:var(--warn)"></i><b class="num">0.03%</b> <span>fresh input</span></li>
+      </ul>
+    </div>
+
+    <p class="pull">
+      You are paying, over and over, to re-send a conversation that already
+      happened.
+    </p>
+  </div>
+</section>
+
+<!-- ─────────────────────────  MISSED  ───────────────────────── -->
+<section class="wrap section">
+  <h2 class="section-title">Three things that change the number</h2>
+  <p class="section-sub">Each one was found by reading the transcripts, not by guessing. Other tools miss all three.</p>
+
+  <div class="cards">
+    <article class="card">
+      <div class="card-stat num">$385</div>
+      <h3>Subagents are billed separately</h3>
+      <p>
+        Their turns don't live in the session transcript — they're in
+        <code>&lt;session&gt;/subagents/agent-*.jsonl</code>. Anything reading
+        only the top level ignores them. In one real measurement: <b>304 agents
+        across 51 sessions.</b> One session spent 38% of its cost there.
+      </p>
+    </article>
+
+    <article class="card">
+      <div class="card-stat num">33,241</div>
+      <h3>Resuming a session double-counts</h3>
+      <p>
+        Resuming replays earlier lines into a brand-new file. Without
+        deduplicating on <code>requestId</code> those turns are billed to you
+        twice in the report. That was <b>33,241 duplicates across 35,842
+        turns</b> — nearly one in two.
+      </p>
+    </article>
+
+    <article class="card">
+      <div class="card-stat num">≈</div>
+      <h3>Not every account bills per token</h3>
+      <p>
+        A subscription with overage disabled charges you a flat rate no matter
+        what. Adding it to the total inflates your bill with money nobody
+        charges you. claude-burn reads <code>hasExtraUsageEnabled</code>, marks
+        those with <b>≈</b>, and excludes them from every budget.
+      </p>
+    </article>
+  </div>
+</section>
+
+<!-- ─────────────────────────  APP  ───────────────────────── -->
+<section class="band" id="app">
+  <div class="wrap">
+    <h2 class="section-title">Which session, and which turn</h2>
+    <p class="section-sub">
+      Sessions are named from the <code>ai-title</code> lines Claude&nbsp;Code
+      already writes, so you can recognise them instead of guessing from a
+      project path.
+    </p>
+
+    <div class="window">
+      <div class="win-bar">
+        <span class="tl"></span><span class="tl"></span><span class="tl"></span>
+        <div class="tabs"><b>Sessions</b><span>Overview</span><span>Models</span><span>Alerts</span><span>Settings</span></div>
+      </div>
+      <table class="tbl">
+        <thead>
+          <tr><th class="r">cost</th><th class="r">$/turn</th><th class="r">turns</th><th class="r">ctx max</th><th>session</th><th>models</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="r num b">$1.247</td><td class="r num faint">$0.32</td><td class="r num dim">3.868</td><td class="r num crit">999k</td>
+            <td><b>refactor-checkout-to-server-components</b><span class="sub">work · shop-web</span></td>
+            <td><span class="tag tag-crit">fable-5</span><span class="tag">opus-5</span><span class="tag tag-warn">53 sub · $80</span></td>
+          </tr>
+          <tr>
+            <td class="r num b">$1.059</td><td class="r num faint">$0.28</td><td class="r num dim">3.729</td><td class="r num crit">997k</td>
+            <td><b>oauth-migration</b><span class="sub">work · shop-web</span></td>
+            <td><span class="tag">opus-5</span><span class="tag tag-ok">4 compact</span></td>
+          </tr>
+          <tr>
+            <td class="r num b">$624</td><td class="r num faint">$0.70</td><td class="r num dim">894</td><td class="r num crit">999k</td>
+            <td><b>i18n-amenity-summaries</b><span class="sub">work · shop-web</span></td>
+            <td><span class="tag tag-crit">fable-5</span><span class="tag tag-warn">87 sub · $52</span></td>
+          </tr>
+          <tr class="dimmed">
+            <td class="r num">≈$328</td><td class="r num faint">$0.52</td><td class="r num dim">633</td><td class="r num hot">971k</td>
+            <td><b>astro-blog-rewrite</b><span class="sub">personal · site — flat rate, not billed</span></td>
+            <td><span class="tag">opus-5</span></td>
+          </tr>
+          <tr>
+            <td class="r num b">$180</td><td class="r num faint">$0.19</td><td class="r num dim">947</td><td class="r num warn">410k</td>
+            <td><b>timezone-bug-in-reports</b><span class="sub">work · admin-panel</span></td>
+            <td><span class="tag">sonnet-5</span><span class="tag tag-ok">2 compact</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="split">
+      <div>
+        <h3 class="h3">The chart that answers it</h3>
+        <p>
+          Context and cost share an X axis — the turn number. When the context
+          line climbs and stays up, every turn after it costs more without
+          doing more work. The dashed lines are the alert thresholds:
+          <b class="warn">250k</b> warns, <b class="crit">500k</b> is critical.
+        </p>
+        <p class="faint">
+          Compactions are marked, so you can see exactly what a
+          <code>/compact</code> bought you — and what it cost you not to.
+        </p>
+      </div>
+      <div class="chart-card">
+        <svg viewBox="0 0 420 190" class="chart" role="img" aria-label="Context and cost per turn">
+          <defs>
+            <linearGradient id="ctxfill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#f0803c" stop-opacity=".34"/>
+              <stop offset="100%" stop-color="#f0803c" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <line x1="34" y1="126" x2="410" y2="126" class="ref"/>
+          <text x="36" y="122" class="ref-t warn">250k</text>
+          <line x1="34" y1="66" x2="410" y2="66" class="ref"/>
+          <text x="36" y="62" class="ref-t crit">500k</text>
+          <path class="ctx-area" fill="url(#ctxfill)"
+            d="M34,168 L70,150 L106,140 L142,132 L150,150 L186,120 L222,96 L258,74 L294,58 L330,44 L366,36 L402,30 L402,178 L34,178 Z"/>
+          <path class="ctx-line"
+            d="M34,168 L70,150 L106,140 L142,132 L150,150 L186,120 L222,96 L258,74 L294,58 L330,44 L366,36 L402,30"/>
+          <path class="cost-line"
+            d="M34,174 L70,170 L106,168 L142,164 L150,172 L186,160 L222,150 L258,138 L294,126 L330,112 L366,104 L402,98"/>
+          <g class="compact">
+            <line x1="150" y1="18" x2="150" y2="178"/>
+            <text x="154" y="26">/compact</text>
+          </g>
+          <text x="34" y="16" class="axis">context</text>
+          <text x="372" y="16" class="axis cool">cost/turn</text>
+        </svg>
+        <div class="chart-legend">
+          <span><i style="background:var(--hot)"></i>context</span>
+          <span><i style="background:var(--cool)"></i>cost per turn</span>
+          <span><i class="dash"></i>compaction</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────  BLOCK  ───────────────────────── -->
+<section class="wrap section" id="block">
+  <div class="split split-wide">
+    <div>
+      <span class="badge">the part that isn't a dashboard</span>
+      <h2 class="section-title tight">It can stop you.</h2>
+      <p>
+        Every other tool tells you after the fact. claude-burn ships a
+        <code>UserPromptSubmit</code> hook that <b>cuts the turn before it's
+        sent</b> once you're over your cap.
+      </p>
+      <p>
+        You turn it on and choose which caps it enforces <b>from the app</b>,
+        not by editing shell. That's deliberate: while the block is active, the
+        message you'd use to ask Claude to lift it gets blocked too. The way
+        out can't live inside the chat.
+      </p>
+      <p class="faint">
+        It reads the local database in <b class="num">~17 ms</b> instead of
+        shelling out to <code>npx ccusage</code> on every prompt — 100× faster,
+        no stale cache, and it counts the subagents.
+      </p>
+    </div>
+    <div class="term">
+      <div class="term-bar"><span class="tl"></span><span class="tl"></span><span class="tl"></span><span>claude</span></div>
+      <pre><span class="p">&gt;</span> add retry logic to the sync worker
+
+<span class="blk">🚫 Daily cap of $33 reached (you're at $34.10).</span>
+<span class="blk-d">   Resets at midnight. To keep going today, raise or turn
+   off the block in claude-burn → Settings → Block.</span>
+
+<span class="c">🤖 Opus 5 | 🚨 $34.10/$33 today (103%) | 🔴 month 492%</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────  FEATURES  ───────────────────────── -->
+<section class="band">
+  <div class="wrap">
+    <h2 class="section-title">What's in it</h2>
+    <div class="feat">
+      <div><b>Menu bar meter</b><p>Today's billable spend and how much of your daily cap that is. Always visible, never a surprise.</p></div>
+      <div><b>Daily · weekly · monthly caps</b><p>Calendar week and month, matching how Anthropic bills. A rolling 30-day window never resets, so it can't work as a cap.</p></div>
+      <div><b>Projection</b><p>Where the month lands at your current pace, and what you can still spend per day for the days that remain.</p></div>
+      <div><b>Four alerts</b><p>Budget steps, context bloat on a <em>live</em> session, plan limits, and expensive-model share — with cooldown keyed to the step reached.</p></div>
+      <div><b>Multi-account</b><p>Auto-discovers every <code>~/.claude*</code> config dir. Add, hide or remove them. Each is classified as overage, flat rate, or unknown — never guessed.</p></div>
+      <div><b>Model breakdown</b><p>Including the counterfactual: what the same work would have cost on a cheaper model. Premium models are derived from the price table, not a hardcoded list.</p></div>
+      <div><b>Session titles &amp; search</b><p>Read from the <code>ai-title</code> lines already in your transcripts. 122 of 123 sessions identified in a real dataset.</p></div>
+      <div><b>Cleanup</b><p>Delete old subagent transcripts by age. Safe for your numbers — turns are already deduplicated in SQLite and every query reads from there.</p></div>
+      <div><b>CLI</b><p>The same engine on the command line. <code>burn-cli sessions</code>, <code>agents</code>, <code>composition</code>, <code>status</code> — the last one is what the hooks read.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────  PRIVACY  ───────────────────────── -->
+<section class="wrap section">
+  <div class="privacy">
+    <h2 class="section-title tight">It never phones home</h2>
+    <p>
+      Your transcripts contain your source code. So claude-burn makes
+      <b>zero network requests</b> — not to Anthropic's API, not to telemetry,
+      not to anything. It reads files Claude&nbsp;Code already wrote to disk and
+      keeps a SQLite database on your machine.
+    </p>
+    <ul class="checks">
+      <li>Never reads <code>.credentials.json</code></li>
+      <li>Plan limits come from <code>cachedUsageUtilization</code>, which Claude&nbsp;Code refreshes itself</li>
+      <li>No account, no sign-in, no analytics</li>
+      <li>MIT licensed — <a href="https://github.com/johinsDev/claude-burn">read every line</a></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ─────────────────────────  INSTALL  ───────────────────────── -->
+<section class="band" id="install">
+  <div class="wrap install">
+    <h2 class="section-title">Get it</h2>
+    <div class="cta-row center">
+      <a class="btn btn-solid btn-lg" href="https://github.com/johinsDev/claude-burn/releases/latest">
+        Download for macOS <span class="btn-note">Apple Silicon · 4.4 MB</span>
+      </a>
+    </div>
+    <p class="micro center">
+      Unsigned build — first launch needs right click → Open. On Intel, build
+      from source.
+    </p>
+
+    <div class="code-card">
+      <div class="code-head">Or build it yourself</div>
+      <pre><span class="c2"># requires Rust, Node 20+ and pnpm</span>
+git clone https://github.com/johinsDev/claude-burn
+cd claude-burn && pnpm install
+pnpm --filter @claude-burn/desktop bundle</pre>
+    </div>
+
+    <div class="code-card">
+      <div class="code-head">Try it with invented data first</div>
+      <pre>burn-cli demo
+BURN_DB=<span class="s">"$HOME/Library/Application Support/claude-burn/demo.sqlite"</span> \
+  /Applications/claude-burn.app/Contents/MacOS/claude-burn</pre>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <span>Built with Tauri v2, Rust and React. MIT.</span>
+    <span class="foot-links">
+      <a href="https://github.com/johinsDev/claude-burn">GitHub</a>
+      <a href="https://github.com/johinsDev/claude-burn/releases/latest">Releases</a>
+      <a href="https://github.com/johinsDev/claude-burn/issues">Issues</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

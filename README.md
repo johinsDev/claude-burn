@@ -10,7 +10,7 @@ not to anything. It only reads files Claude Code already writes to disk, and it
 never touches `.credentials.json`. That matters, because your transcripts
 contain your source code.
 
-<!-- SCREENSHOTS -->
+**[claude-burn.vercel.app](https://claude-burn-three.vercel.app)** — what it looks like, and the numbers behind it.
 
 ## Why
 
