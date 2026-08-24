@@ -45,13 +45,25 @@ Three things that change the number, which other tools miss:
 Requires [Rust](https://rustup.rs), Node 20+ and pnpm. macOS only for now
 (the menu bar and notification bits are AppKit-specific; the core is portable).
 
+**Download the `.dmg`** from
+[Releases](https://github.com/johinsDev/claude-burn/releases), or build it
+yourself:
+
 ```bash
 pnpm install
 pnpm --filter @claude-burn/desktop bundle
 open target/release/bundle/dmg/claude-burn_0.1.0_aarch64.dmg
 ```
 
-The bundle isn't signed, so the first launch needs right click → Open.
+The bundle isn't signed, so the first launch needs right click → Open. If macOS
+still refuses, clear the quarantine flag:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/claude-burn.app
+```
+
+Apple Silicon only for now — the release `.dmg` is `aarch64`. On Intel, build
+from source.
 
 The autostart toggle lives under **Alertas**. Without it the app isn't running,
 and context alerts are worthless — they only mean anything while the session is
@@ -60,12 +72,20 @@ still open.
 ## Try it without your own data
 
 ```bash
-pnpm --filter @claude-burn/desktop demo
+burn-cli demo    # writes to <data dir>/demo.sqlite, never your real database
 ```
 
-Seeds a database of invented accounts, projects and sessions, then opens the
-app against it. A demo database is flagged in `settings` and is never synced,
-so it can't get contaminated with your real transcripts.
+Then launch the app pointed at it:
+
+```bash
+BURN_DB="$HOME/Library/Application Support/claude-burn/demo.sqlite" \
+  /Applications/claude-burn.app/Contents/MacOS/claude-burn
+```
+
+Invented accounts, projects and sessions. A demo database is flagged in
+`settings` and is never synced or watched, so it can't get contaminated with
+your real transcripts — and `burn-cli demo` refuses to write into a database
+that already holds real turns.
 
 ## Accounts
 

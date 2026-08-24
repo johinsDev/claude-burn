@@ -23,6 +23,17 @@ pub fn default_db_path() -> PathBuf {
         .join("burn.sqlite")
 }
 
+/// Base de demo, siempre en un archivo aparte.
+///
+/// Nunca comparte ruta con la real: sembrar datos inventados encima del gasto
+/// de alguien seria destruir el unico registro que la app tiene.
+pub fn demo_db_path() -> PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("claude-burn")
+        .join("demo.sqlite")
+}
+
 pub fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

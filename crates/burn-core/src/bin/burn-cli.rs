@@ -71,17 +71,39 @@ fn main() -> Result<()> {
     let (filter, args) = take_filter(&raw);
     let cmd = args.first().map(String::as_str).unwrap_or("report");
 
+    // `demo` va a su propio archivo salvo que se pida otro a proposito: por
+    // defecto escribiria encima de la base real y borraria el historico.
     let db_path = std::env::var("BURN_DB")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| burn_core::default_db_path());
+        .unwrap_or_else(|_| {
+            if cmd == "demo" {
+                burn_core::demo_db_path()
+            } else {
+                burn_core::default_db_path()
+            }
+        });
     let mut db = Store::open(&db_path)?;
 
     // La base de demo no se sincroniza: se llenaria con los transcripts
     // reales de la maquina y dejaria de servir para capturas.
     if cmd == "demo" {
+        // Si la base ya tiene turnos y no esta marcada como demo, es de
+        // alguien: sembrar encima le borraria semanas de historico.
+        let already_demo = db.get_setting(burn_core::demo::DEMO_KEY)?.is_some();
+        if !already_demo && db.turn_count()? > 0 {
+            anyhow::bail!(
+                "{} ya tiene datos reales. Borrala o usa BURN_DB=/otra/ruta.",
+                db_path.display()
+            );
+        }
         burn_core::demo::seed(&mut db)?;
         println!("base de demo lista en {}", db_path.display());
-        println!("  BURN_DEMO=1 BURN_DB={} pnpm dev", db_path.display());
+        println!();
+        println!("Para abrir la app contra ella:");
+        println!(
+            "  BURN_DB=\"{}\" \\\n    /Applications/claude-burn.app/Contents/MacOS/claude-burn",
+            db_path.display()
+        );
         return Ok(());
     }
 

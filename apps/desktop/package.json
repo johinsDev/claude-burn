@@ -12,7 +12,7 @@
     "bundle": "tauri build",
     "lint": "oxlint src",
     "typecheck": "tsc --noEmit",
-    "demo": "cargo run --release -p burn-core --bin burn-cli -- demo && BURN_DEMO=1 pnpm tauri dev"
+    "demo": "cargo run --release -p burn-core --bin burn-cli -- demo && BURN_DB=\"$HOME/Library/Application Support/claude-burn/demo.sqlite\" pnpm tauri dev"
   },
   "dependencies": {
     "@claude-burn/pricing": "workspace:*",
