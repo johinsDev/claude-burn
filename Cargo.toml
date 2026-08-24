@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/burn-core"]
+members = ["crates/burn-core", "apps/desktop/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"

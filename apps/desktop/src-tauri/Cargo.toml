@@ -1,0 +1,25 @@
+[package]
+name = "claude-burn"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Medidor de gasto diario de Claude Code"
+default-run = "claude-burn"
+
+[lib]
+name = "claude_burn_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+burn-core = { path = "../../../crates/burn-core" }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+notify.workspace = true

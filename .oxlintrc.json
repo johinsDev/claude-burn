@@ -1,14 +1,31 @@
 {
-  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "unicorn"],
-  "env": { "browser": true, "es2024": true },
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "react",
+    "typescript",
+    "unicorn"
+  ],
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
   "categories": {
     "correctness": "error",
     "suspicious": "warn",
     "perf": "warn"
   },
   "rules": {
-    "unicorn/filename-case": ["error", { "case": "kebabCase" }]
+    "unicorn/filename-case": [
+      "error",
+      {
+        "case": "kebabCase"
+      }
+    ],
+    "react/react-in-jsx-scope": "off"
   },
-  "ignorePatterns": ["dist", "target", "node_modules", "src/components/ui"]
+  "ignorePatterns": [
+    "dist",
+    "target",
+    "node_modules"
+  ]
 }

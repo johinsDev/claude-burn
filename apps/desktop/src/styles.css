@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0b0d12;
+  --color-panel: #12151d;
+  --color-panel-2: #171b25;
+  --color-line: #232838;
+  --color-ink: #e8ecf5;
+  --color-ink-dim: #8f9ab3;
+  --color-ink-faint: #5d677f;
+
+  /* La escala del gasto: de trabajo barato a plata quemandose. */
+  --color-cool: #5eb3f6;
+  --color-ok: #4ec9a0;
+  --color-warn: #f5b53f;
+  --color-hot: #f0803c;
+  --color-crit: #ec5a4a;
+
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family:
+      -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  /* Los numeros no deben bailar cuando se actualizan. */
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
+  }
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+    border-radius: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--color-hot) 35%, transparent);
+  }
+}
+
+/* El popover flota: fondo propio con esquinas redondeadas. */
+.popover-root {
+  background: color-mix(in oklab, var(--color-panel) 96%, transparent);
+  backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  overflow: hidden;
+  height: 100%;
+}
