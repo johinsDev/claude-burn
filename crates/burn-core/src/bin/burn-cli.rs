@@ -284,6 +284,22 @@ fn print_status(db: &Store, profs: &[burn_core::profiles::Profile]) -> Result<()
         .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
         .unwrap_or(serde_json::Value::Null);
     let budget = |key: &str| cfg.get(key).and_then(serde_json::Value::as_f64);
+    // El hook decide con esto si corta el turno; por defecto, solo el diario.
+    let guard_enabled = cfg
+        .get("guard_enabled")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(true);
+    let guard_periods = cfg
+        .get("guard_periods")
+        .and_then(serde_json::Value::as_array)
+        .map_or_else(
+            || vec!["daily".to_string()],
+            |a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            },
+        );
 
     println!(
         "{}",
@@ -295,6 +311,8 @@ fn print_status(db: &Store, profs: &[burn_core::profiles::Profile]) -> Result<()
             "month": mon,
             "month_budget": budget("budget_monthly_usd"),
             "accounts": billable,
+            "guard_enabled": guard_enabled,
+            "guard_periods": guard_periods,
         })
     );
     Ok(())

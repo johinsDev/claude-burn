@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { api, type CleanupPreview, type ProfileEntry } from "@/lib/api";
+import { api, type AlertConfig, type CleanupPreview, type ProfileEntry } from "@/lib/api";
 import { useAsyncData } from "@/hooks/use-async-data";
 import { Badge, Button, Empty, Panel, PanelHead } from "@/components/ui/primitives";
-import { count } from "@/lib/format";
+import { count, money } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,7 +22,10 @@ export function Settings() {
   return (
     <div className="grid grid-cols-2 gap-3">
       <AccountsPanel rows={list ?? []} onChange={setRows} />
-      <CleanupPanel />
+      <div className="space-y-3">
+        <GuardPanel />
+        <CleanupPanel />
+      </div>
     </div>
   );
 }
@@ -143,6 +146,116 @@ function AccountsPanel({
             </Button>
           </p>
         ) : null}
+      </div>
+    </Panel>
+  );
+}
+
+const GUARD_PERIODS: { id: string; label: string; hint: string }[] = [
+  { id: "daily", label: "diario", hint: "el techo del dia" },
+  { id: "weekly", label: "semanal", hint: "el techo de la semana" },
+  { id: "monthly", label: "mensual", hint: "el techo del mes" },
+];
+
+/**
+ * El bloqueo: lo unico del sistema que frena en vez de avisar.
+ *
+ * Se configura aca y no en el shell a proposito. Cuando el bloqueo esta
+ * activo, el mensaje con el que pedirias desbloquearlo tambien queda
+ * bloqueado: tiene que haber una salida fuera del chat.
+ */
+function GuardPanel() {
+  const { data: loaded } = useAsyncData(() => api.alertConfig(), []);
+  const [cfg, setCfg] = useState<AlertConfig | null>(null);
+  const current = cfg ?? loaded;
+
+  if (!current) return null;
+
+  const save = (next: AlertConfig) => {
+    setCfg(next);
+    void api.setAlertConfig(next);
+  };
+
+  const togglePeriod = (id: string) => {
+    const has = current.guard_periods.includes(id);
+    save({
+      ...current,
+      guard_periods: has
+        ? current.guard_periods.filter((p) => p !== id)
+        : [...current.guard_periods, id],
+    });
+  };
+
+  const capFor = (id: string) =>
+    id === "daily"
+      ? current.budget_daily_usd
+      : id === "weekly"
+        ? current.budget_weekly_usd
+        : current.budget_monthly_usd;
+
+  return (
+    <Panel>
+      <PanelHead
+        title="Bloqueo"
+        right={
+          <Button
+            variant={current.guard_enabled ? "solid" : undefined}
+            onClick={() => save({ ...current, guard_enabled: !current.guard_enabled })}
+          >
+            {current.guard_enabled ? "Activo" : "Apagado"}
+          </Button>
+        }
+      />
+      <div className="space-y-2.5 px-3.5 py-3">
+        <p className="text-[11px] leading-snug text-ink-faint">
+          Corta el turno antes de mandarlo cuando ya te pasaste. Es lo unico que{" "}
+          <span className="text-ink-dim">frena</span> en vez de avisar. Necesita el
+          hook <code className="text-ink-dim">budget-guard.sh</code> conectado en{" "}
+          <code className="text-ink-dim">settings.json</code> de la cuenta.
+        </p>
+
+        <div
+          className={cn(
+            "space-y-1.5",
+            current.guard_enabled ? "" : "pointer-events-none opacity-40",
+          )}
+        >
+          <div className="text-[10px] uppercase tracking-wider text-ink-faint">
+            que techos hace cumplir
+          </div>
+          {GUARD_PERIODS.map((p) => {
+            const on = current.guard_periods.includes(p.id);
+            const cap = capFor(p.id);
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => togglePeriod(p.id)}
+                className={cn(
+                  "flex w-full items-center justify-between rounded border px-2.5 py-1.5 text-left transition-colors",
+                  on
+                    ? "border-hot/50 bg-panel-2"
+                    : "border-line bg-panel-2/40 hover:border-ink-faint",
+                )}
+              >
+                <span className="text-[11.5px]">
+                  {p.label}
+                  <span className="text-ink-faint">
+                    {" "}
+                    · {cap ? money(cap) : "sin techo definido"}
+                  </span>
+                </span>
+                <span className={cn("text-[10px]", on ? "text-hot" : "text-ink-faint")}>
+                  {on ? "bloquea" : "no bloquea"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="text-[10px] leading-snug text-ink-faint">
+          Un techo sin monto definido no bloquea nunca, este tildado o no.
+        </p>
       </div>
     </Panel>
   );

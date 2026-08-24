@@ -52,6 +52,16 @@ pub struct Alert {
     pub session_id: Option<String>,
 }
 
+fn yes() -> bool {
+    true
+}
+
+/// Solo el diario por defecto. El mensual es un techo que ya puede estar
+/// pasado cuando lo configuras, y arrancar bloqueando todo no ayuda a nadie.
+fn default_guard_periods() -> Vec<String> {
+    vec!["daily".to_string()]
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlertConfig {
     pub budget_daily_usd: Option<f64>,
@@ -59,6 +69,16 @@ pub struct AlertConfig {
     pub budget_monthly_usd: Option<f64>,
     /// Escalones de presupuesto y de limite de plan, en porcentaje.
     pub budget_steps: Vec<u32>,
+    /// Si el hook `UserPromptSubmit` corta el turno al pasarse del techo.
+    ///
+    /// Es lo unico que *frena* en vez de avisar, asi que tiene que poder
+    /// apagarse sin editar shell: un dia que de verdad haya que seguir, el
+    /// bloqueo tambien se come el mensaje que pediria desbloquearlo.
+    #[serde(default = "yes")]
+    pub guard_enabled: bool,
+    /// Que techos hace cumplir el bloqueo: `daily`, `weekly`, `monthly`.
+    #[serde(default = "default_guard_periods")]
+    pub guard_periods: Vec<String>,
     pub limit_steps: Vec<u32>,
     pub context_warn_tokens: i64,
     pub context_critical_tokens: i64,
@@ -76,6 +96,8 @@ impl Default for AlertConfig {
             budget_weekly_usd: None,
             budget_monthly_usd: None,
             budget_steps: vec![50, 75, 90, 100],
+            guard_enabled: true,
+            guard_periods: default_guard_periods(),
             limit_steps: vec![75, 90],
             // 250K es donde el cache_read empieza a dominar la factura;
             // 500K es donde cada turno cuesta mas que el trabajo que hace.
@@ -279,6 +301,20 @@ fn expensive_model_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Aler
 
 #[cfg(test)]
 mod tests {
+    /// Una config guardada antes de que existiera el bloqueo no debe romper
+    /// la deserializacion ni quedar con el guard apagado por accidente.
+    #[test]
+    fn config_vieja_estrena_el_guard_prendido() {
+        let raw = r#"{"budget_daily_usd":33.0,"budget_weekly_usd":null,
+            "budget_monthly_usd":1000.0,"budget_steps":[50,100],"limit_steps":[75],
+            "context_warn_tokens":250000,"context_critical_tokens":500000,
+            "expensive_share":0.5,"expensive_min_usd":25.0,"cooldown_minutes":45}"#;
+        let cfg: super::AlertConfig = serde_json::from_str(raw).unwrap();
+        assert!(cfg.guard_enabled);
+        assert_eq!(cfg.guard_periods, vec!["daily".to_string()]);
+        assert_eq!(cfg.budget_monthly_usd, Some(1000.0));
+    }
+
     use super::*;
     use crate::profiles::PlanLimit;
 

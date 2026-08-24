@@ -185,6 +185,10 @@ export type AlertConfig = {
   budget_weekly_usd: number | null;
   budget_monthly_usd: number | null;
   budget_steps: number[];
+  /// Si el hook de Claude Code corta el turno al pasarse del techo.
+  guard_enabled: boolean;
+  /// Que techos hace cumplir: "daily" | "weekly" | "monthly".
+  guard_periods: string[];
   limit_steps: number[];
   context_warn_tokens: number;
   context_critical_tokens: number;
