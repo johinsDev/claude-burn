@@ -8,8 +8,22 @@
 use crate::record::Turn;
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
+
+/// Recorte que aplican todas las consultas de agregacion.
+///
+/// `since` se compara lexicograficamente contra `ts`: los transcripts guardan
+/// la hora en ISO-8601 UTC, donde el orden alfabetico es el cronologico.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct Filter {
+    pub account: Option<String>,
+    pub since: Option<String>,
+}
+
+/// Predicado comun. Los parametros van siempre en el mismo orden — `?1`
+/// cuenta, `?2` desde — para que ninguna consulta los cruce.
+const SCOPE: &str = "(?1 IS NULL OR account = ?1) AND (?2 IS NULL OR ts >= ?2)";
 
 pub struct Store {
     conn: Connection,
@@ -226,6 +240,15 @@ impl Store {
             .query_row("SELECT COUNT(*) FROM turns", [], |r| r.get(0))?)
     }
 
+    /// Primer y ultimo dia con datos.
+    pub fn data_range(&self) -> Result<(Option<String>, Option<String>)> {
+        Ok(self.conn.query_row(
+            "SELECT MIN(day), MAX(day) FROM turns WHERE day != ''",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?)
+    }
+
     pub fn by_month(&self) -> Result<Vec<MonthRow>> {
         let mut stmt = self.conn.prepare(
             "SELECT month, account, SUM(cost_usd), COUNT(*)
@@ -244,14 +267,14 @@ impl Store {
         Ok(rows)
     }
 
-    pub fn by_day(&self, account: Option<&str>, limit: i64) -> Result<Vec<DayRow>> {
-        let mut stmt = self.conn.prepare(
+    pub fn by_day(&self, f: &Filter, limit: i64) -> Result<Vec<DayRow>> {
+        let mut stmt = self.conn.prepare(&format!(
             "SELECT day, account, SUM(cost_usd), COUNT(*)
-             FROM turns WHERE day != '' AND (?1 IS NULL OR account = ?1)
-             GROUP BY day, account ORDER BY day DESC LIMIT ?2",
-        )?;
+             FROM turns WHERE day != '' AND {SCOPE}
+             GROUP BY day, account ORDER BY day DESC LIMIT ?3"
+        ))?;
         let rows = stmt
-            .query_map(params![account, limit], |r| {
+            .query_map(params![f.account, f.since, limit], |r| {
                 Ok(DayRow {
                     day: r.get(0)?,
                     account: r.get(1)?,
@@ -263,13 +286,14 @@ impl Store {
         Ok(rows)
     }
 
-    pub fn by_model(&self) -> Result<Vec<ModelRow>> {
-        let mut stmt = self.conn.prepare(
+    pub fn by_model(&self, f: &Filter) -> Result<Vec<ModelRow>> {
+        let mut stmt = self.conn.prepare(&format!(
             "SELECT account, COALESCE(model, raw_model), SUM(cost_usd), COUNT(*), SUM(out_tok)
-             FROM turns GROUP BY account, COALESCE(model, raw_model) ORDER BY SUM(cost_usd) DESC",
-        )?;
+             FROM turns WHERE {SCOPE}
+             GROUP BY account, COALESCE(model, raw_model) ORDER BY SUM(cost_usd) DESC"
+        ))?;
         let rows = stmt
-            .query_map([], |r| {
+            .query_map(params![f.account, f.since], |r| {
                 Ok(ModelRow {
                     account: r.get(0)?,
                     model: r.get(1)?,
@@ -284,11 +308,13 @@ impl Store {
 
     /// Composicion del gasto. Es la consulta que explica el problema:
     /// cuanto de la factura es trabajo y cuanto es arrastrar contexto.
-    pub fn composition(&self) -> Result<Composition> {
+    pub fn composition(&self, f: &Filter) -> Result<Composition> {
         Ok(self.conn.query_row(
-            "SELECT SUM(cost_input), SUM(cost_w5m), SUM(cost_w1h), SUM(cost_read),
-                    SUM(cost_output), SUM(cost_websearch) FROM turns",
-            [],
+            &format!(
+                "SELECT SUM(cost_input), SUM(cost_w5m), SUM(cost_w1h), SUM(cost_read),
+                        SUM(cost_output), SUM(cost_websearch) FROM turns WHERE {SCOPE}"
+            ),
+            params![f.account, f.since],
             |r| {
                 Ok(Composition {
                     fresh_input: r.get::<_, Option<f64>>(0)?.unwrap_or(0.0),
@@ -302,17 +328,21 @@ impl Store {
         )?)
     }
 
-    pub fn top_sessions(&self, limit: i64) -> Result<Vec<SessionRow>> {
-        let mut stmt = self.conn.prepare(
+    pub fn top_sessions(&self, f: &Filter, limit: i64) -> Result<Vec<SessionRow>> {
+        // El recorte va en el WHERE, asi que una sesion que cruza el borde del
+        // periodo aparece con el costo que tuvo *dentro* del periodo.
+        let mut stmt = self.conn.prepare(&format!(
             "SELECT t.session_id, t.account, t.project, MIN(t.ts), MAX(t.ts), COUNT(*),
                     SUM(t.cost_usd), MAX(t.ctx_tok),
                     CAST(AVG(t.ctx_tok) AS INTEGER),
-                    COALESCE((SELECT SUM(f.compactions) FROM files f WHERE f.session_id = t.session_id), 0),
+                    COALESCE((SELECT SUM(fl.compactions) FROM files fl
+                              WHERE fl.session_id = t.session_id), 0),
                     GROUP_CONCAT(DISTINCT COALESCE(t.model, t.raw_model))
-             FROM turns t GROUP BY t.session_id ORDER BY SUM(t.cost_usd) DESC LIMIT ?1",
-        )?;
+             FROM turns t WHERE {SCOPE}
+             GROUP BY t.session_id ORDER BY SUM(t.cost_usd) DESC LIMIT ?3"
+        ))?;
         let rows = stmt
-            .query_map(params![limit], |r| {
+            .query_map(params![f.account, f.since, limit], |r| {
                 let turns: i64 = r.get(5)?;
                 let cost: f64 = r.get(6)?;
                 Ok(SessionRow {
@@ -381,13 +411,13 @@ impl Store {
     }
 
     /// Distribucion de requests por tamano de contexto, en tramos de 100K.
-    pub fn context_histogram(&self) -> Result<Vec<(i64, i64)>> {
-        let mut stmt = self.conn.prepare(
+    pub fn context_histogram(&self, f: &Filter) -> Result<Vec<(i64, i64)>> {
+        let mut stmt = self.conn.prepare(&format!(
             "SELECT MIN(ctx_tok / 100000, 10) AS bucket, COUNT(*)
-             FROM turns GROUP BY bucket ORDER BY bucket",
-        )?;
+             FROM turns WHERE {SCOPE} GROUP BY bucket ORDER BY bucket"
+        ))?;
         let rows = stmt
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .query_map(params![f.account, f.since], |r| Ok((r.get(0)?, r.get(1)?)))?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
     }
@@ -616,7 +646,7 @@ mod tests {
         assert_eq!(s.insert_turns(&[turn("req_1", "s2", 1.0)]).unwrap(), 0);
         assert_eq!(s.turn_count().unwrap(), 1);
         // y se queda con la primera sesion que lo produjo
-        let sessions = s.top_sessions(10).unwrap();
+        let sessions = s.top_sessions(&Filter::default(), 10).unwrap();
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].session_id, "s1");
     }
@@ -639,7 +669,7 @@ mod tests {
         let mut s = Store::open_in_memory().unwrap();
         s.insert_turns(&[turn("a", "s1", 2.0), turn("b", "s1", 4.0)])
             .unwrap();
-        let row = &s.top_sessions(1).unwrap()[0];
+        let row = &s.top_sessions(&Filter::default(), 1).unwrap()[0];
         assert_eq!(row.turns, 2);
         assert!((row.cost_per_turn - 3.0).abs() < 1e-9);
         assert_eq!(row.max_ctx, 300_000);

@@ -48,6 +48,8 @@ nuevo, la regla ya lo cubre.
 
 ## CLI
 
+Filtros combinables con cualquier comando: `--account <nombre>` y `--days <n>`.
+
 ```
 cargo run --release --bin burn-cli -- report        # todo
 cargo run --release --bin burn-cli -- months        # gasto por mes y cuenta
@@ -58,7 +60,15 @@ cargo run --release --bin burn-cli -- context       # requests por tamano de con
 cargo run --release --bin burn-cli -- plan          # limites del plan y sesiones vivas
 ```
 
+```
+cargo run --release --bin burn-cli -- models --account cruisebound --days 7
+```
+
 `BURN_DB=/ruta/burn.sqlite` cambia la base; por defecto va al data dir del SO.
+
+El historico arranca donde arrancan los transcripts: Claude Code poda los
+viejos, asi que "todo" son las ultimas semanas, no desde siempre. La app
+muestra el rango exacto al lado del filtro.
 
 ## Como se mantiene al dia
 

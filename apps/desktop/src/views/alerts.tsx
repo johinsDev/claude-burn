@@ -178,17 +178,33 @@ function FiredList({
 }
 
 function AlertRow({ fired }: { fired: FiredAlert }) {
-  const tone = SEVERITY_TONE[fired.alert.severity] ?? "neutral";
+  const { alert } = fired;
+  const tone = SEVERITY_TONE[alert.severity] ?? "neutral";
+  // El titulo trae el nombre de la sesion, que no alcanza para ubicarla: hay
+  // sesiones con el mismo nombre en cuentas distintas.
+  const origin = [alert.account, alert.project?.split("/").slice(-2).join("/")]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <li className="px-3.5 py-2.5">
       <div className="flex items-start justify-between gap-2">
-        <span className="text-[12px] font-medium">{fired.alert.title}</span>
+        <span className="text-[12px] font-medium">{alert.title}</span>
         <Badge tone={tone}>{KIND_LABEL[fired.kind] ?? fired.kind}</Badge>
       </div>
-      {fired.alert.body ? (
-        <p className="mt-0.5 text-[11px] leading-snug text-ink-dim">{fired.alert.body}</p>
+      {origin ? (
+        <p className="mt-0.5 truncate text-[10.5px] text-ink-dim">{origin}</p>
       ) : null}
-      <p className="mt-1 text-[10px] text-ink-faint">{ago(fired.fired_at_ms)}</p>
+      {alert.body ? (
+        <p className="mt-0.5 text-[11px] leading-snug text-ink-dim">{alert.body}</p>
+      ) : null}
+      <div className="mt-1 flex items-baseline justify-between gap-2">
+        <span className="text-[10px] text-ink-faint">{ago(fired.fired_at_ms)}</span>
+        {alert.session_id ? (
+          <span className="num truncate text-[9.5px] text-ink-faint/70">
+            {alert.session_id.slice(0, 8)}
+          </span>
+        ) : null}
+      </div>
     </li>
   );
 }

@@ -53,7 +53,7 @@ pub fn refresh_tray<R: Runtime>(app: &AppHandle<R>) {
     let Some(state) = app.try_state::<AppState>() else {
         return;
     };
-    let Ok(overview) = build_overview(&state) else {
+    let Ok(overview) = build_overview(&state, &Default::default()) else {
         return;
     };
     if let Some(tray) = app.tray_by_id(TRAY_ID) {

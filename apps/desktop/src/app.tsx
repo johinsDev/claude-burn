@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { api } from "@/lib/api";
+import { api, buildFilter, type PeriodId } from "@/lib/api";
+import { FilterBar, type Scope } from "@/components/ui/filter-bar";
 import { useAsyncData, useInterval } from "@/hooks/use-async-data";
 import { Button, Empty } from "@/components/ui/primitives";
 import { TrayPopover } from "@/views/tray-popover";
@@ -32,7 +33,12 @@ export function App() {
 function MainWindow() {
   const [tab, setTab] = useState<Tab>("overview");
   const [busy, setBusy] = useState(false);
-  const { data, reload } = useAsyncData(() => api.overview(), []);
+  const [scope, setScope] = useState<Scope>({ period: "30" as PeriodId, account: null });
+  const filter = buildFilter(scope.period, scope.account);
+  const { data, reload } = useAsyncData(
+    () => api.overview(filter),
+    [scope.period, scope.account],
+  );
 
   useInterval(reload, 30_000);
 
@@ -73,7 +79,16 @@ function MainWindow() {
             </button>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-1 pb-1.5">
+        <div className="ml-auto flex items-center gap-2 pb-1.5">
+          {tab === "alerts" ? null : (
+            <FilterBar
+              scope={scope}
+              onChange={setScope}
+              accounts={data?.known_accounts ?? []}
+              dataFrom={data?.data_from}
+              dataTo={data?.data_to}
+            />
+          )}
           <Button onClick={() => void refresh()} disabled={busy}>
             {busy ? "sincronizando…" : "Actualizar"}
           </Button>
@@ -90,9 +105,9 @@ function MainWindow() {
               <Empty>leyendo transcripts…</Empty>
             )
           ) : tab === "sessions" ? (
-            <Sessions />
+            <Sessions scope={scope} />
           ) : tab === "models" ? (
-            <Models />
+            <Models scope={scope} />
           ) : (
             <Alerts />
           )}

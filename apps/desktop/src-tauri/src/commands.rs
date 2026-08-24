@@ -5,7 +5,7 @@
 
 use crate::state::{AppState, TraySummary};
 use burn_core::profiles::{self, Billing, LiveSession, PlanUsage};
-use burn_core::store::{Composition, DayRow, ModelRow, MonthRow, SessionRow, TurnPoint};
+use burn_core::store::{Composition, DayRow, Filter, ModelRow, MonthRow, SessionRow, TurnPoint};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
@@ -40,6 +40,12 @@ pub struct Overview {
     pub by_month: Vec<MonthRow>,
     pub composition: Composition,
     pub tray: TraySummary,
+    /// Cuentas conocidas, para poblar el filtro sin una consulta aparte.
+    pub known_accounts: Vec<String>,
+    /// Primer y ultimo dia con datos. Claude Code poda transcripts viejos, asi
+    /// que el historico no arranca donde el usuario cree.
+    pub data_from: Option<String>,
+    pub data_to: Option<String>,
 }
 
 fn day_string(offset_days: i64) -> String {
@@ -55,7 +61,7 @@ fn utc_since(days: i64) -> String {
         .to_string()
 }
 
-pub fn build_overview(state: &AppState) -> anyhow::Result<Overview> {
+pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overview> {
     let profs = state.profiles.lock().unwrap().clone();
     let db = state.db.lock().unwrap();
 
@@ -106,6 +112,8 @@ pub fn build_overview(state: &AppState) -> anyhow::Result<Overview> {
         None => (None, None),
     };
 
+    let (data_from, data_to) = db.data_range()?;
+
     // Contexto de la sesion viva mas cargada: el numero que dispara la alerta
     // de contexto inflado.
     let max_live_ctx = accounts
@@ -130,16 +138,19 @@ pub fn build_overview(state: &AppState) -> anyhow::Result<Overview> {
         today_billable_usd,
         week_usd: db.cost_since(&utc_since(7), None)?,
         month_usd: db.cost_since(&utc_since(30), None)?,
-        by_day: db.by_day(None, 60)?,
+        by_day: db.by_day(filter, 120)?,
         by_month: db.by_month()?,
-        composition: db.composition()?,
+        composition: db.composition(filter)?,
         tray,
+        known_accounts: profs.iter().map(|p| p.name.clone()).collect(),
+        data_from,
+        data_to,
     })
 }
 
 #[tauri::command]
-pub fn overview(state: State<'_, AppState>) -> Res<Overview> {
-    build_overview(&state).map_err(err)
+pub fn overview(state: State<'_, AppState>, filter: Option<Filter>) -> Res<Overview> {
+    build_overview(&state, &filter.unwrap_or_default()).map_err(err)
 }
 
 #[tauri::command]
@@ -147,14 +158,45 @@ pub fn sync_now(state: State<'_, AppState>) -> Res<usize> {
     state.sync().map_err(err)
 }
 
+/// Una sesion mas el dato de si su cuenta factura de verdad.
+///
+/// Sin esto la tabla muestra $1.317 para una sesion de una cuenta de tarifa
+/// plana como si fuera una factura, cuando el techo de esa cuenta son $100.
+#[derive(Serialize)]
+pub struct SessionWithBilling {
+    #[serde(flatten)]
+    pub row: SessionRow,
+    pub is_billable: bool,
+}
+
 #[tauri::command]
-pub fn sessions(state: State<'_, AppState>, limit: Option<i64>) -> Res<Vec<SessionRow>> {
-    state
+pub fn sessions(
+    state: State<'_, AppState>,
+    filter: Option<Filter>,
+    limit: Option<i64>,
+) -> Res<Vec<SessionWithBilling>> {
+    let filter = filter.unwrap_or_default();
+    let billable: Vec<String> = state
+        .profiles
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|p| p.billing == Billing::Overage)
+        .map(|p| p.name.clone())
+        .collect();
+    let rows = state
         .db
         .lock()
         .unwrap()
-        .top_sessions(limit.unwrap_or(200))
-        .map_err(err)
+        .top_sessions(&filter, limit.unwrap_or(300))
+        .map_err(err)?;
+    Ok(rows
+        .into_iter()
+        .map(|row| SessionWithBilling {
+            is_billable: billable.contains(&row.account),
+            row,
+        })
+        .collect())
 }
 
 #[tauri::command]
@@ -168,13 +210,26 @@ pub fn session_timeline(state: State<'_, AppState>, session_id: String) -> Res<V
 }
 
 #[tauri::command]
-pub fn models(state: State<'_, AppState>) -> Res<Vec<ModelRow>> {
-    state.db.lock().unwrap().by_model().map_err(err)
+pub fn models(state: State<'_, AppState>, filter: Option<Filter>) -> Res<Vec<ModelRow>> {
+    state
+        .db
+        .lock()
+        .unwrap()
+        .by_model(&filter.unwrap_or_default())
+        .map_err(err)
 }
 
 #[tauri::command]
-pub fn context_histogram(state: State<'_, AppState>) -> Res<Vec<(i64, i64)>> {
-    state.db.lock().unwrap().context_histogram().map_err(err)
+pub fn context_histogram(
+    state: State<'_, AppState>,
+    filter: Option<Filter>,
+) -> Res<Vec<(i64, i64)>> {
+    state
+        .db
+        .lock()
+        .unwrap()
+        .context_histogram(&filter.unwrap_or_default())
+        .map_err(err)
 }
 
 #[tauri::command]

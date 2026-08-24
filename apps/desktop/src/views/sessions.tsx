@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { api, type SessionRow } from "@/lib/api";
+import { api, buildFilter, type SessionRow } from "@/lib/api";
+import type { Scope } from "@/components/ui/filter-bar";
 import { Badge, Empty, Panel, PanelHead } from "@/components/ui/primitives";
 import { contextTone, money, projectName, shortDate, tokens, toneClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -16,24 +17,21 @@ const COLUMNS: { key: SortKey; label: string; width: string }[] = [
   { key: "last_ts", label: "fecha", width: "w-24" },
 ];
 
-export function Sessions() {
+export function Sessions({ scope }: { scope: Scope }) {
   const [sort, setSort] = useState<SortKey>("cost_usd");
-  const [account, setAccount] = useState<string>("todas");
   const [selected, setSelected] = useState<SessionRow | null>(null);
-  const { data: rows, loading } = useAsyncData(() => api.sessions(300), []);
-
-  const accounts = useMemo(
-    () => ["todas", ...new Set((rows ?? []).map((r) => r.account))],
-    [rows],
+  const { data: rows, loading } = useAsyncData(
+    () => api.sessions(buildFilter(scope.period, scope.account)),
+    [scope.period, scope.account],
   );
 
-  const visible = useMemo(() => {
-    if (!rows) return [];
-    const filtered = account === "todas" ? rows : rows.filter((r) => r.account === account);
-    return filtered.toSorted((a, b) =>
-      sort === "last_ts" ? b.last_ts.localeCompare(a.last_ts) : b[sort] - a[sort],
-    );
-  }, [rows, sort, account]);
+  const visible = useMemo(
+    () =>
+      (rows ?? []).toSorted((a, b) =>
+        sort === "last_ts" ? b.last_ts.localeCompare(a.last_ts) : b[sort] - a[sort],
+      ),
+    [rows, sort],
+  );
 
   const hasFlatRate = visible.some((r) => !r.is_billable);
 
@@ -42,27 +40,7 @@ export function Sessions() {
   return (
     <>
       <Panel className="overflow-hidden">
-        <PanelHead
-          title={`${visible.length} sesiones`}
-          right={
-            <div className="flex gap-1">
-              {accounts.map((a) => (
-                <button
-                  key={a}
-                  onClick={() => setAccount(a)}
-                  className={cn(
-                    "rounded px-2 py-0.5 text-[10px] transition-colors",
-                    account === a
-                      ? "bg-panel-2 text-ink"
-                      : "text-ink-faint hover:text-ink-dim",
-                  )}
-                >
-                  {a}
-                </button>
-              ))}
-            </div>
-          }
-        />
+        <PanelHead title={`${visible.length} sesiones`} />
         {hasFlatRate ? (
           <p className="border-b border-line bg-panel-2/40 px-3.5 py-2 text-[10.5px] leading-snug text-ink-faint">
             Los costos con <span className="text-ink-dim">≈</span> son de cuentas

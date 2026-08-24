@@ -191,7 +191,9 @@ function LiveRow({
           {session.status ?? "?"}
         </Badge>
       </div>
-      <div className="mt-0.5 truncate text-[10px] text-ink-faint">{session.account}</div>
+      <div className="mt-0.5 truncate text-[10px] text-ink-faint">
+        {session.account} · {session.cwd.split("/").slice(-2).join("/")}
+      </div>
     </div>
   );
 }

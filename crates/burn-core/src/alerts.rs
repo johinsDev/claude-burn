@@ -44,6 +44,12 @@ pub struct Alert {
     pub title: String,
     pub body: String,
     pub severity: Severity,
+    /// De donde vino. Sin esto una alerta de contexto solo dice un nombre de
+    /// sesion, que no alcanza para saber en que cuenta ni en que proyecto
+    /// mirar — ni para volver a encontrarla despues.
+    pub account: Option<String>,
+    pub project: Option<String>,
+    pub session_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -143,6 +149,9 @@ fn budget_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Alert>) {
             continue;
         };
         out.push(Alert {
+            account: None,
+            project: None,
+            session_id: None,
             kind: AlertKind::Budget,
             key: format!("{id}:{step}"),
             title: if step >= 100 {
@@ -174,11 +183,15 @@ fn context_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Alert>) {
                 .to_string()
         });
         out.push(Alert {
+            account: Some(session.account.clone()),
+            project: Some(session.cwd.clone()),
+            session_id: Some(session.session_id.clone()),
             kind: AlertKind::Context,
             key: format!("{}:{}", session.session_id, threshold),
             title: format!("Contexto inflado en {name}"),
             body: format!(
-                "{} de contexto. A este tamano casi todo el costo del turno es releer lo mismo: /compact o sesion nueva.",
+                "{} · {} de contexto. A este tamano casi todo el costo del turno es releer lo mismo: /compact o sesion nueva.",
+                session.account,
                 fmt_tokens(*ctx)
             ),
             severity,
@@ -204,6 +217,9 @@ fn plan_limit_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Alert>) {
                 other => other,
             };
             out.push(Alert {
+                account: Some(account.clone()),
+                project: None,
+                session_id: None,
                 kind: AlertKind::PlanLimit,
                 key: format!("{account}:{}:{step}", l.kind),
                 title: format!("{}% del limite {window} en {account}", l.percent.round()),
@@ -247,6 +263,9 @@ fn expensive_model_alerts(snap: &Snapshot, cfg: &AlertConfig, out: &mut Vec<Aler
         }
         let factor = rate.output / baseline;
         out.push(Alert {
+            account: None,
+            project: None,
+            session_id: None,
             kind: AlertKind::ExpensiveModel,
             key: format!("{model}:{}", (share * 10.0) as u32),
             title: format!("{} se lleva el {:.0}% de hoy", rate.label, share * 100.0),
@@ -333,6 +352,19 @@ mod tests {
         // clave distinta: cruzar el umbral critico es una alerta nueva
         assert_eq!(b.key, "s1:500000");
         assert!(b.body.contains("compact"));
+    }
+
+    #[test]
+    fn la_alerta_de_contexto_dice_de_donde_vino() {
+        let s = Snapshot {
+            live: vec![(live("s1"), 700_000)],
+            ..snap()
+        };
+        let a = &evaluate(&s, &AlertConfig::default())[0];
+        assert_eq!(a.account.as_deref(), Some("cruisebound"));
+        assert_eq!(a.session_id.as_deref(), Some("s1"));
+        assert_eq!(a.project.as_deref(), Some("/Users/x/proyecto"));
+        assert!(a.body.contains("cruisebound"));
     }
 
     #[test]

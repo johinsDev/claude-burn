@@ -80,6 +80,9 @@ export type Overview = {
   by_month: MonthRow[];
   composition: Composition;
   tray: TraySummary;
+  known_accounts: string[];
+  data_from: string | null;
+  data_to: string | null;
 };
 
 export type SessionRow = {
@@ -134,17 +137,46 @@ export type FiredAlert = {
     title: string;
     body: string;
     severity: "info" | "warn" | "critical";
+    account: string | null;
+    project: string | null;
+    session_id: string | null;
   };
 };
 
+/** Recorte que comparten Resumen, Sesiones y Modelos. */
+export type Filter = { account: string | null; since: string | null };
+
+export const PERIODS = [
+  { id: "1", label: "Hoy", days: 1 },
+  { id: "7", label: "7 dias", days: 7 },
+  { id: "30", label: "30 dias", days: 30 },
+  { id: "all", label: "Todo", days: null },
+] as const;
+
+export type PeriodId = (typeof PERIODS)[number]["id"];
+
+/** Convierte periodo + cuenta en el filtro que espera el backend. */
+export function buildFilter(period: PeriodId, account: string | null): Filter {
+  const days = PERIODS.find((p) => p.id === period)?.days ?? null;
+  return {
+    account,
+    since:
+      days === null
+        ? null
+        : new Date(Date.now() - days * 86_400_000).toISOString().replace("Z", "Z"),
+  };
+}
+
 export const api = {
-  overview: () => invoke<Overview>("overview"),
+  overview: (filter?: Filter) => invoke<Overview>("overview", { filter }),
   syncNow: () => invoke<number>("sync_now"),
-  sessions: (limit?: number) => invoke<SessionRow[]>("sessions", { limit }),
+  sessions: (filter?: Filter, limit?: number) =>
+    invoke<SessionRow[]>("sessions", { filter, limit }),
   sessionTimeline: (sessionId: string) =>
     invoke<TurnPoint[]>("session_timeline", { sessionId }),
-  models: () => invoke<ModelRow[]>("models"),
-  contextHistogram: () => invoke<[number, number][]>("context_histogram"),
+  models: (filter?: Filter) => invoke<ModelRow[]>("models", { filter }),
+  contextHistogram: (filter?: Filter) =>
+    invoke<[number, number][]>("context_histogram", { filter }),
   budgets: () => invoke<[string, string, number][]>("budgets"),
   setBudget: (scope: string, period: string, limitUsd: number) =>
     invoke<void>("set_budget", { scope, period, limitUsd }),

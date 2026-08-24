@@ -11,13 +11,64 @@
 //!   burn-cli context     distribucion de requests por tamano de contexto
 //!   burn-cli plan        limites del plan y sesiones vivas
 //!   burn-cli report      todo lo anterior de una
+//!
+//! Filtros, combinables con cualquier comando:
+//!   --account <nombre>   solo esa cuenta
+//!   --days <n>           solo los ultimos n dias
 
 use anyhow::Result;
-use burn_core::{profiles, store::Store, sync_default};
+use burn_core::{
+    profiles,
+    store::{Filter, Store},
+    sync_default,
+};
 use std::collections::BTreeMap;
 
+/// Saca `--account X` y `--days N` de los argumentos y devuelve el resto.
+fn take_filter(args: &[String]) -> (Filter, Vec<String>) {
+    let mut filter = Filter::default();
+    let mut rest = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--account" => {
+                filter.account = args.get(i + 1).cloned();
+                i += 2;
+            }
+            "--days" => {
+                if let Some(n) = args.get(i + 1).and_then(|s| s.parse::<i64>().ok()) {
+                    filter.since = Some(
+                        (chrono::Utc::now() - chrono::Duration::days(n))
+                            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+                            .to_string(),
+                    );
+                }
+                i += 2;
+            }
+            _ => {
+                rest.push(args[i].clone());
+                i += 1;
+            }
+        }
+    }
+    (filter, rest)
+}
+
+fn scope_label(f: &Filter) -> String {
+    let mut parts = Vec::new();
+    if let Some(a) = &f.account {
+        parts.push(format!("cuenta {a}"));
+    }
+    match &f.since {
+        Some(s) => parts.push(format!("desde {}", &s[..10])),
+        None => parts.push("todo el historico".into()),
+    }
+    parts.join(" · ")
+}
+
 fn main() -> Result<()> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    let (filter, args) = take_filter(&raw);
     let cmd = args.first().map(String::as_str).unwrap_or("report");
 
     let db_path = std::env::var("BURN_DB")
@@ -47,37 +98,41 @@ fn main() -> Result<()> {
         println!();
     }
 
+    if cmd != "sync" {
+        println!("== alcance: {} ==\n", scope_label(&filter));
+    }
+
     match cmd {
         "sync" => {}
         "months" | "report" => {
             print_months(&db, &profs)?;
             if cmd == "report" {
                 println!();
-                print_composition(&db)?;
+                print_composition(&db, &filter)?;
                 println!();
-                print_models(&db)?;
+                print_models(&db, &filter)?;
                 println!();
-                print_sessions(&db, 12)?;
+                print_sessions(&db, &filter, 12)?;
                 println!();
-                print_context(&db)?;
+                print_context(&db, &filter)?;
                 println!();
                 print_plan(&profs)?;
             }
         }
         "days" => {
             let n: i64 = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(30);
-            for row in db.by_day(None, n)? {
+            for row in db.by_day(&filter, n)? {
                 println!(
                     "{}  {:<12} ${:>9.2}  {:>5} turnos",
                     row.day, row.account, row.cost_usd, row.turns
                 );
             }
         }
-        "models" => print_models(&db)?,
-        "composition" => print_composition(&db)?,
+        "models" => print_models(&db, &filter)?,
+        "composition" => print_composition(&db, &filter)?,
         "sessions" => {
             let n: i64 = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(20);
-            print_sessions(&db, n)?;
+            print_sessions(&db, &filter, n)?;
         }
         "session" => {
             let Some(id) = args.get(1) else {
@@ -85,7 +140,7 @@ fn main() -> Result<()> {
             };
             print_timeline(&db, id)?;
         }
-        "context" => print_context(&db)?,
+        "context" => print_context(&db, &filter)?,
         "plan" => print_plan(&profs)?,
         other => anyhow::bail!("comando desconocido: {other}"),
     }
@@ -120,8 +175,8 @@ fn print_months(db: &Store, profs: &[profiles::Profile]) -> Result<()> {
     Ok(())
 }
 
-fn print_composition(db: &Store) -> Result<()> {
-    let c = db.composition()?;
+fn print_composition(db: &Store, f: &Filter) -> Result<()> {
+    let c = db.composition(f)?;
     let t = c.total();
     println!("== en que se va la plata ==");
     let mut rows = [
@@ -141,9 +196,9 @@ fn print_composition(db: &Store) -> Result<()> {
     Ok(())
 }
 
-fn print_models(db: &Store) -> Result<()> {
+fn print_models(db: &Store, f: &Filter) -> Result<()> {
     println!("== gasto por modelo ==");
-    for r in db.by_model()? {
+    for r in db.by_model(f)? {
         println!(
             "  {:<12} {:<22} ${:>9.0}  {:>6} turnos",
             r.account, r.model, r.cost_usd, r.turns
@@ -152,13 +207,13 @@ fn print_models(db: &Store) -> Result<()> {
     Ok(())
 }
 
-fn print_sessions(db: &Store, n: i64) -> Result<()> {
+fn print_sessions(db: &Store, f: &Filter, n: i64) -> Result<()> {
     println!("== sesiones mas caras ==");
     println!(
         "  {:>9}  {:>7}  {:<12} {:>6} {:>9} {:>8} {:>5}  proyecto",
         "costo", "$/turno", "cuenta", "turnos", "ctx max", "ctx prom", "comp"
     );
-    for s in db.top_sessions(n)? {
+    for s in db.top_sessions(f, n)? {
         println!(
             "  ${:>8.0}  ${:>6.2}  {:<12} {:>6} {:>9} {:>8} {:>5}  {}",
             s.cost_usd,
@@ -209,9 +264,9 @@ fn print_timeline(db: &Store, session_id: &str) -> Result<()> {
     Ok(())
 }
 
-fn print_context(db: &Store) -> Result<()> {
+fn print_context(db: &Store, f: &Filter) -> Result<()> {
     println!("== requests por tamano de contexto ==");
-    let rows = db.context_histogram()?;
+    let rows = db.context_histogram(f)?;
     let total: i64 = rows.iter().map(|(_, c)| c).sum();
     for (bucket, count) in rows {
         let pct = if total > 0 {

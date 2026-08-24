@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Tooltip, XAxis, YAxis } from "recharts";
 import pricingTable from "@claude-burn/pricing/pricing.json" with { type: "json" };
-import { api } from "@/lib/api";
+import { api, buildFilter } from "@/lib/api";
+import type { Scope } from "@/components/ui/filter-bar";
 import { useAsyncData } from "@/hooks/use-async-data";
 import { Empty, Panel, PanelHead, Stat } from "@/components/ui/primitives";
 import { ChartFrame, fmt, tooltipStyle } from "@/components/ui/chart-frame";
@@ -11,9 +12,11 @@ import { cn } from "@/lib/utils";
 type Rate = { id: string; label: string; input: number; output: number };
 const RATES = new Map((pricingTable.models as Rate[]).map((m) => [m.id, m]));
 
-export function Models() {
-  const { data: rows, loading } = useAsyncData(() => api.models(), []);
-  const { data: hist } = useAsyncData(() => api.contextHistogram(), []);
+export function Models({ scope }: { scope: Scope }) {
+  const filter = buildFilter(scope.period, scope.account);
+  const deps = [scope.period, scope.account];
+  const { data: rows, loading } = useAsyncData(() => api.models(filter), deps);
+  const { data: hist } = useAsyncData(() => api.contextHistogram(filter), deps);
 
   const byModel = useMemo(() => {
     const acc = new Map<string, number>();
