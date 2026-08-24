@@ -86,48 +86,27 @@ export function TrayPopover() {
           </p>
         ) : null}
 
-        {data.month.budget_usd ? (
-          <div className="space-y-1 rounded border border-line bg-panel-2/40 p-2">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[11px] text-ink-dim">
-                Mes · techo {money(data.month.budget_usd)}
-              </span>
-              <span
-                className={cn(
-                  "num text-[11px] font-semibold",
-                  toneClass[monthTone(data.month.spent_usd, data.month.budget_usd)],
-                )}
-              >
-                {((data.month.spent_usd / data.month.budget_usd) * 100).toFixed(0)}%
-              </span>
-            </div>
-            <Meter
-              value={Math.min((data.month.spent_usd / data.month.budget_usd) * 100, 100)}
-              tone={monthTone(data.month.spent_usd, data.month.budget_usd)}
+        {data.month.scoped_flat_account ? null : (
+          <div className="space-y-2 rounded border border-line bg-panel-2/40 p-2">
+            <PopoverMeter
+              label="Hoy"
+              spent={data.month.today.spent_usd}
+              budget={data.month.today.budget_usd}
             />
-            <div className="flex justify-between text-[10px] text-ink-faint">
-              <span>{money(data.month.spent_usd)} facturado</span>
-              <span>
-                {data.month.daily_allowance_usd === 0
-                  ? "techo pasado"
-                  : `${money(data.month.daily_allowance_usd ?? 0)} por dia`}
-              </span>
-            </div>
+            <PopoverMeter
+              label="Semana"
+              spent={data.month.week.spent_usd}
+              budget={data.month.week.budget_usd}
+              foot={data.month.week.elapsed_label}
+            />
+            <PopoverMeter
+              label="Mes"
+              spent={data.month.spent_usd}
+              budget={data.month.budget_usd}
+              foot={`dia ${data.month.day} de ${data.month.days_in_month}`}
+            />
           </div>
-        ) : null}
-
-        {/* Facturado, igual que el titular. Sumar la tarifa plana aca hacia
-            que estos dos numeros no significaran nada. */}
-        <div className="grid grid-cols-2 gap-2">
-          <MiniStat
-            label="7 dias · facturado"
-            value={money(data.week_billable_usd, { compact: true })}
-          />
-          <MiniStat
-            label="30 dias · facturado"
-            value={money(data.month_billable_usd, { compact: true })}
-          />
-        </div>
+        )}
 
         {limits.length > 0 ? (
           <Section title="Limites del plan">
@@ -194,15 +173,6 @@ export function TrayPopover() {
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-line bg-panel-2/60 px-2.5 py-2">
-      <div className="text-[10px] uppercase tracking-wider text-ink-faint">{label}</div>
-      <div className="num mt-0.5 text-sm font-semibold">{value}</div>
-    </div>
-  );
-}
-
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-2">
@@ -261,7 +231,51 @@ function limitLabel(kind: string): string {
   }
 }
 
-/** El techo mensual pintado como el resto de los medidores. */
-function monthTone(spent: number, budget: number): "ok" | "warn" | "hot" | "crit" {
-  return limitTone((spent / budget) * 100);
+
+/**
+ * Un periodo contra su techo, en la version angosta del popover: etiqueta y
+ * porcentaje arriba, la barra, y el pie con lo que queda.
+ */
+function PopoverMeter({
+  label,
+  spent,
+  budget,
+  foot,
+}: {
+  label: string;
+  spent: number;
+  budget: number | null;
+  foot?: string;
+}) {
+  if (!budget) {
+    return (
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[11px] text-ink-dim">{label}</span>
+        <span className="num text-[11px] font-semibold">{money(spent)}</span>
+      </div>
+    );
+  }
+  const share = spent / budget;
+  const tone = limitTone(share * 100);
+  const left = budget - spent;
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="truncate text-[11px] text-ink-dim">
+          {label} · techo {money(budget)}
+        </span>
+        <span className={cn("num text-[11px] font-semibold", toneClass[tone])}>
+          {(share * 100).toFixed(0)}%
+        </span>
+      </div>
+      <Meter value={Math.min(share * 100, 100)} tone={tone} />
+      <div className="flex justify-between text-[10px] text-ink-faint">
+        <span>{money(spent)} facturado</span>
+        <span className={cn(left < 0 && toneClass.crit)}>
+          {left >= 0 ? `${money(left)} libres` : `${money(-left)} pasado`}
+          {foot ? ` · ${foot}` : ""}
+        </span>
+      </div>
+    </div>
+  );
 }

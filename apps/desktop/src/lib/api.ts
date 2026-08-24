@@ -114,6 +114,26 @@ export type PeriodPace = {
   elapsed_label: string;
 };
 
+/** Un config dir de Claude Code, tal como lo ve la pantalla de Ajustes. */
+export type ProfileEntry = {
+  name: string;
+  config_dir: string;
+  billing: Billing;
+  email: string | null;
+  org: string | null;
+  plan: string | null;
+  /// `false` cuando lo agrego el usuario a mano.
+  discovered: boolean;
+  hidden: boolean;
+  transcripts: number;
+};
+
+export type CleanupPreview = {
+  files: number;
+  bytes: number;
+  older_than_days: number;
+};
+
 /** Cuanto del gasto se lo llevaron los subagentes, que se facturan aparte. */
 export type SubagentSplit = {
   cost_usd: number;
@@ -217,6 +237,15 @@ export const api = {
   syncNow: () => invoke<number>("sync_now"),
   sessions: (filter?: Filter, limit?: number) =>
     invoke<SessionRow[]>("sessions", { filter, limit }),
+  profilesList: () => invoke<ProfileEntry[]>("profiles_list"),
+  profileAdd: (dir: string) => invoke<ProfileEntry[]>("profile_add", { dir }),
+  profileSetHidden: (name: string, hidden: boolean) =>
+    invoke<ProfileEntry[]>("profile_set_hidden", { name, hidden }),
+  profileForget: (dir: string) => invoke<ProfileEntry[]>("profile_forget", { dir }),
+  cleanupPreview: (olderThanDays: number) =>
+    invoke<CleanupPreview>("cleanup_preview", { olderThanDays }),
+  cleanupSubagents: (olderThanDays: number) =>
+    invoke<CleanupPreview>("cleanup_subagents", { olderThanDays }),
   openSession: (sessionId: string) => invoke<void>("open_session", { sessionId }),
   sessionRow: (sessionId: string) =>
     invoke<SessionRow | null>("session_row", { sessionId }),

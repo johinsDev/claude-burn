@@ -49,6 +49,121 @@ fn profile_name(dir: &Path) -> String {
     }
 }
 
+/// `~/x` -> `/Users/quien/x`. Sin esto habria que pegar la ruta absoluta.
+pub fn expand_home(raw: &str) -> PathBuf {
+    let trimmed = raw.trim();
+    match trimmed.strip_prefix("~/") {
+        Some(rest) => dirs::home_dir().unwrap_or_default().join(rest),
+        None => PathBuf::from(trimmed),
+    }
+}
+
+/// Ajustes del usuario sobre el descubrimiento automatico.
+///
+/// El auto-descubrimiento cubre el caso normal (`~/.claude*`), pero no todos
+/// tienen sus config dirs ahi: hay quien los pone en otro disco o los nombra
+/// distinto. Esto deja agregar los que falten y sacar los que no interesan,
+/// sin tocar codigo.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProfileSettings {
+    /// Config dirs agregados a mano, ademas de los descubiertos.
+    #[serde(default)]
+    pub extra_dirs: Vec<PathBuf>,
+    /// Nombres de perfiles que el usuario decidio ignorar.
+    #[serde(default)]
+    pub hidden: Vec<String>,
+}
+
+/// Un config dir candidato, tal como lo ve la pantalla de ajustes.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProfileEntry {
+    #[serde(flatten)]
+    pub profile: Profile,
+    /// `false` cuando lo agrego el usuario y no salio del escaneo del home.
+    pub discovered: bool,
+    pub hidden: bool,
+    /// Transcripts encontrados; 0 delata una ruta mal escrita.
+    pub transcripts: usize,
+}
+
+/// Todo lo que la app conoce: descubierto + agregado, con los ocultos marcados.
+///
+/// Devuelve tambien los ocultos a proposito: si no, sacar una cuenta seria
+/// irreversible desde la interfaz.
+pub fn list_all(settings: &ProfileSettings) -> Result<Vec<ProfileEntry>> {
+    let mut out: Vec<ProfileEntry> = discover()?
+        .into_iter()
+        .map(|profile| entry(profile, true, settings))
+        .collect();
+    for dir in &settings.extra_dirs {
+        let profile = from_config_dir(dir.clone());
+        if out
+            .iter()
+            .any(|e| e.profile.config_dir == profile.config_dir)
+        {
+            continue;
+        }
+        out.push(entry(profile, false, settings));
+    }
+    out.sort_by(|a, b| a.profile.name.cmp(&b.profile.name));
+    Ok(out)
+}
+
+fn entry(profile: Profile, discovered: bool, settings: &ProfileSettings) -> ProfileEntry {
+    ProfileEntry {
+        hidden: settings.hidden.contains(&profile.name),
+        transcripts: count_transcripts(&profile),
+        discovered,
+        profile,
+    }
+}
+
+/// Lo que ocupan en disco los transcripts de subagente de un perfil.
+///
+/// Viven en `<sesion>/subagents/`, aparte del transcript principal, y son la
+/// mayor parte de lo que se puede borrar sin perder una sesion entera.
+pub fn subagent_files(profile: &Profile, older_than_days: u64) -> Vec<(PathBuf, u64)> {
+    let cutoff = std::time::SystemTime::now()
+        .checked_sub(std::time::Duration::from_secs(older_than_days * 86_400));
+    walkdir::WalkDir::new(profile.projects_dir())
+        .max_depth(6)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| {
+            e.path().extension().is_some_and(|x| x == "jsonl")
+                && e.path().components().any(|c| c.as_os_str() == "subagents")
+        })
+        .filter_map(|e| {
+            let md = e.metadata().ok()?;
+            // Sin fecha de modificacion no se puede saber si es viejo, y
+            // borrar por las dudas seria lo peor que puede hacer.
+            let modified = md.modified().ok()?;
+            match cutoff {
+                Some(c) if modified > c => None,
+                _ => Some((e.path().to_path_buf(), md.len())),
+            }
+        })
+        .collect()
+}
+
+fn count_transcripts(profile: &Profile) -> usize {
+    walkdir::WalkDir::new(profile.projects_dir())
+        .max_depth(6)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.path().extension().is_some_and(|x| x == "jsonl"))
+        .count()
+}
+
+/// Los perfiles que la app usa de verdad: descubiertos + agregados - ocultos.
+pub fn active(settings: &ProfileSettings) -> Result<Vec<Profile>> {
+    Ok(list_all(settings)?
+        .into_iter()
+        .filter(|e| !e.hidden && e.transcripts > 0)
+        .map(|e| e.profile)
+        .collect())
+}
+
 /// Busca directorios de configuracion de Claude Code en el home: `.claude` y
 /// cualquier `.claude-*`. Solo cuenta los que tienen un `projects/` adentro.
 pub fn discover() -> Result<Vec<Profile>> {

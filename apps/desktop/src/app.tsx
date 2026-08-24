@@ -13,6 +13,7 @@ const Overview = lazy(() => import("@/views/overview").then((m) => ({ default: m
 const Sessions = lazy(() => import("@/views/sessions").then((m) => ({ default: m.Sessions })));
 const Models = lazy(() => import("@/views/models").then((m) => ({ default: m.Models })));
 const Alerts = lazy(() => import("@/views/alerts").then((m) => ({ default: m.Alerts })));
+const Settings = lazy(() => import("@/views/settings").then((m) => ({ default: m.Settings })));
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -20,6 +21,7 @@ const TABS = [
   { id: "sessions", label: "Sesiones" },
   { id: "models", label: "Modelos" },
   { id: "alerts", label: "Alertas" },
+  { id: "settings", label: "Ajustes" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["id"];
@@ -91,7 +93,7 @@ function MainWindow() {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2 pb-1.5">
-          {tab === "alerts" ? null : (
+          {tab === "alerts" || tab === "settings" ? null : (
             <FilterBar
               scope={scope}
               onChange={setScope}
@@ -123,8 +125,10 @@ function MainWindow() {
             />
           ) : tab === "models" ? (
             <Models scope={scope} />
-          ) : (
+          ) : tab === "alerts" ? (
             <Alerts />
+          ) : (
+            <Settings />
           )}
         </Suspense>
       </main>

@@ -3,7 +3,10 @@
  * sistema: los numeros de la app se leen al lado de codigo y de rutas, y que
  * cambien de forma segun la maquina hace imposible compararlos de memoria.
  */
-const GROUPED = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 });
+const GROUPED = new Intl.NumberFormat("es-ES", {
+  maximumFractionDigits: 0,
+  useGrouping: "always",
+});
 
 function group(n: number): string {
   return GROUPED.format(n);

@@ -1,7 +1,7 @@
 //! Estado compartido de la app: la base y el snapshot que alimenta el tray.
 
 use anyhow::Result;
-use burn_core::profiles::Profile;
+use burn_core::profiles::{Profile, ProfileSettings};
 use burn_core::store::Store;
 use serde::Serialize;
 use std::sync::Mutex;
@@ -11,16 +11,53 @@ pub struct AppState {
     pub profiles: Mutex<Vec<Profile>>,
 }
 
+/// Clave de los ajustes de cuentas dentro de `settings`.
+pub const PROFILES_KEY: &str = "profile_settings";
+
 impl AppState {
     pub fn new() -> Result<Self> {
         let db = Store::open(&burn_core::default_db_path())?;
-        let profiles = burn_core::profiles::discover()?;
+        let profiles = burn_core::profiles::active(&read_profile_settings(&db))?;
         Ok(Self {
             db: Mutex::new(db),
             profiles: Mutex::new(profiles),
         })
     }
 
+    /// Relee los ajustes de cuentas y rearma la lista activa.
+    ///
+    /// Se llama despues de agregar u ocultar una cuenta: sin esto el cambio
+    /// no se veria hasta reiniciar la app.
+    pub fn reload_profiles(&self) -> Result<Vec<Profile>> {
+        let profiles = {
+            let db = self.db.lock().unwrap();
+            burn_core::profiles::active(&read_profile_settings(&db))?
+        };
+        *self.profiles.lock().unwrap() = profiles.clone();
+        Ok(profiles)
+    }
+
+    pub fn profile_settings(&self) -> ProfileSettings {
+        let db = self.db.lock().unwrap();
+        read_profile_settings(&db)
+    }
+
+    pub fn save_profile_settings(&self, s: &ProfileSettings) -> Result<()> {
+        let db = self.db.lock().unwrap();
+        db.set_setting(PROFILES_KEY, &serde_json::to_string(s)?)?;
+        Ok(())
+    }
+}
+
+fn read_profile_settings(db: &Store) -> ProfileSettings {
+    db.get_setting(PROFILES_KEY)
+        .ok()
+        .flatten()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default()
+}
+
+impl AppState {
     /// Sincroniza y devuelve cuantos turnos nuevos entraron.
     pub fn sync(&self) -> Result<usize> {
         let profiles = self.profiles.lock().unwrap().clone();
@@ -39,6 +76,8 @@ pub struct TraySummary {
     pub month_billable_usd: f64,
     /// Techo mensual configurado, si hay uno.
     pub month_budget_usd: Option<f64>,
+    /// Techo diario, que es el que acompana al $ de hoy en el icono.
+    pub day_budget_usd: Option<f64>,
     pub worst_limit_pct: Option<f64>,
     pub worst_limit_kind: Option<String>,
     pub live_sessions: usize,
@@ -54,8 +93,13 @@ impl TraySummary {
         } else {
             format!("${:.1}", self.today_billable_usd)
         };
-        // Con un techo mensual, el porcentaje que importa es ese. El del plan
-        // sale de la cuenta de tarifa plana y no dice nada sobre la factura.
+        // El $ del icono es el de hoy, asi que el % tambien: dos periodos
+        // distintos pegados no se leen, se confunden.
+        if let Some(budget) = self.day_budget_usd.filter(|b| *b > 0.0) {
+            let pct = self.today_billable_usd / budget * 100.0;
+            return format!("{money} · {pct:.0}%");
+        }
+        // Sin techo diario, el mensual es lo mejor que hay.
         if let Some(budget) = self.month_budget_usd.filter(|b| *b > 0.0) {
             let pct = self.month_billable_usd / budget * 100.0;
             return format!("{money} · {pct:.0}% mes");

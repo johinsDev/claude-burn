@@ -330,6 +330,7 @@ pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overv
         today_billable_usd: totals.today_billable,
         month_billable_usd: month_billable,
         month_budget_usd: month_budget,
+        day_budget_usd: cfg.budget_daily_usd.filter(|l| *l > 0.0),
         worst_limit_pct,
         worst_limit_kind,
         live_sessions: live_total,
@@ -479,6 +480,120 @@ pub fn reveal_main_window(app: &AppHandle) {
         let _ = main.unminimize();
         let _ = main.set_focus();
     }
+}
+
+/// Cuanto disco ocupan los transcripts de subagente mas viejos que N dias.
+#[derive(Serialize)]
+pub struct CleanupPreview {
+    pub files: usize,
+    pub bytes: u64,
+    pub older_than_days: u64,
+}
+
+fn cleanup_targets(state: &AppState, older_than_days: u64) -> Vec<(std::path::PathBuf, u64)> {
+    let profs = state.profiles.lock().unwrap().clone();
+    profs
+        .iter()
+        .flat_map(|p| profiles::subagent_files(p, older_than_days))
+        .collect()
+}
+
+/// Que se borraria, sin borrar nada. Siempre se consulta antes de limpiar.
+#[tauri::command]
+pub fn cleanup_preview(state: State<'_, AppState>, older_than_days: u64) -> Res<CleanupPreview> {
+    let targets = cleanup_targets(&state, older_than_days);
+    Ok(CleanupPreview {
+        files: targets.len(),
+        bytes: targets.iter().map(|(_, len)| len).sum(),
+        older_than_days,
+    })
+}
+
+/// Borra los transcripts de subagente mas viejos que N dias.
+///
+/// No cambia ningun numero de la app: los turnos ya estan deduplicados en
+/// SQLite y todas las consultas salen de ahi. Lo unico que se pierde es poder
+/// hacer `--resume` de esas ramas de subagente.
+#[tauri::command]
+pub fn cleanup_subagents(state: State<'_, AppState>, older_than_days: u64) -> Res<CleanupPreview> {
+    // Un dia de margen: nunca tocar lo que puede estar escribiendose ahora.
+    if older_than_days < 1 {
+        return Err("el minimo es 1 dia, para no tocar sesiones vivas".to_string());
+    }
+    let targets = cleanup_targets(&state, older_than_days);
+    let mut files = 0;
+    let mut bytes = 0;
+    for (path, len) in targets {
+        if std::fs::remove_file(&path).is_ok() {
+            files += 1;
+            bytes += len;
+        }
+    }
+    Ok(CleanupPreview {
+        files,
+        bytes,
+        older_than_days,
+    })
+}
+
+/// Las cuentas conocidas, incluidas las ocultas, para la pantalla de ajustes.
+#[tauri::command]
+pub fn profiles_list(state: State<'_, AppState>) -> Res<Vec<profiles::ProfileEntry>> {
+    profiles::list_all(&state.profile_settings()).map_err(err)
+}
+
+/// Agrega un config dir a mano.
+///
+/// Se valida que tenga `projects/` adentro antes de guardarlo: una ruta mal
+/// escrita que se acepta en silencio aparece despues como una cuenta vacia y
+/// no hay forma de saber que fue un tipeo.
+#[tauri::command]
+pub fn profile_add(state: State<'_, AppState>, dir: String) -> Res<Vec<profiles::ProfileEntry>> {
+    let path = profiles::expand_home(&dir);
+    if !path.join("projects").is_dir() {
+        return Err(format!(
+            "{} no parece un config dir de Claude Code: no tiene projects/",
+            path.display()
+        ));
+    }
+    let mut settings = state.profile_settings();
+    if !settings.extra_dirs.contains(&path) {
+        settings.extra_dirs.push(path);
+    }
+    state.save_profile_settings(&settings).map_err(err)?;
+    state.reload_profiles().map_err(err)?;
+    profiles_list(state)
+}
+
+/// Muestra u oculta una cuenta.
+///
+/// Ocultar no borra nada: los turnos ya ingeridos siguen en la base y la
+/// cuenta se puede volver a mostrar.
+#[tauri::command]
+pub fn profile_set_hidden(
+    state: State<'_, AppState>,
+    name: String,
+    hidden: bool,
+) -> Res<Vec<profiles::ProfileEntry>> {
+    let mut settings = state.profile_settings();
+    settings.hidden.retain(|n| n != &name);
+    if hidden {
+        settings.hidden.push(name);
+    }
+    state.save_profile_settings(&settings).map_err(err)?;
+    state.reload_profiles().map_err(err)?;
+    profiles_list(state)
+}
+
+/// Saca de la lista un config dir agregado a mano.
+#[tauri::command]
+pub fn profile_forget(state: State<'_, AppState>, dir: String) -> Res<Vec<profiles::ProfileEntry>> {
+    let path = profiles::expand_home(&dir);
+    let mut settings = state.profile_settings();
+    settings.extra_dirs.retain(|d| d != &path);
+    state.save_profile_settings(&settings).map_err(err)?;
+    state.reload_profiles().map_err(err)?;
+    profiles_list(state)
 }
 
 /// Abre la ventana principal en el detalle de una sesion.
