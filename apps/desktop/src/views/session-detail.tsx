@@ -13,7 +13,14 @@ import { api, type SessionRow, type TurnPoint } from "@/lib/api";
 import { useAsyncData } from "@/hooks/use-async-data";
 import { Badge, Button, Empty, Stat } from "@/components/ui/primitives";
 import { ChartFrame, fmt, tooltipStyle } from "@/components/ui/chart-frame";
-import { contextTone, money, projectName, tokens, toneClass } from "@/lib/format";
+import {
+  contextTone,
+  money,
+  projectName,
+  sessionTitle,
+  tokens,
+  toneClass,
+} from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -90,6 +97,7 @@ export function SessionDetail({
   }, [points]);
 
   const tone = contextTone(session.max_ctx);
+  const label = sessionTitle(session);
 
   return (
     <div
@@ -102,12 +110,17 @@ export function SessionDetail({
       >
         <header className="flex items-start justify-between border-b border-line px-5 py-3.5">
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold">
-              {projectName(session.project)}
+            <h2 className="truncate text-sm font-semibold" title={label.text}>
+              {label.text}
             </h2>
             <p className="num mt-0.5 truncate text-[10.5px] text-ink-faint">
-              {session.account} · {session.session_id}
+              {session.account} · {projectName(session.project)} · {session.session_id}
             </p>
+            {label.kind === "title" && session.prompt ? (
+              <p className="mt-1.5 line-clamp-2 max-w-2xl text-[11px] leading-snug text-ink-dim">
+                <span className="text-ink-faint">arranco con:</span> {session.prompt}
+              </p>
+            ) : null}
           </div>
           <Button onClick={onClose}>Cerrar · esc</Button>
         </header>

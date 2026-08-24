@@ -41,6 +41,8 @@ pub struct FileCursor<'a> {
     pub offset: u64,
     /// Compactaciones vistas en esta pasada, que se suman a las ya conocidas.
     pub compactions_delta: u32,
+    /// `true` cuando esta pasada ya cubrio el archivo entero buscando titulo.
+    pub meta_scanned: bool,
 }
 
 const SCHEMA: &str = r#"
@@ -56,6 +58,15 @@ CREATE TABLE IF NOT EXISTS files (
     mtime_ms    INTEGER NOT NULL DEFAULT 0,
     offset      INTEGER NOT NULL DEFAULT 0,
     compactions INTEGER NOT NULL DEFAULT 0
+);
+
+-- Titulo y primer prompt de cada sesion. Va aparte de `turns` porque una
+-- sesion vive en varios archivos cuando se retoma, y el titulo es de la
+-- sesion, no del archivo.
+CREATE TABLE IF NOT EXISTS session_meta (
+    session_id TEXT PRIMARY KEY,
+    title      TEXT,
+    prompt     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS turns (
@@ -119,20 +130,69 @@ CREATE TABLE IF NOT EXISTS alerts (
 CREATE INDEX IF NOT EXISTS idx_alerts_key ON alerts(kind, key, fired_at_ms);
 "#;
 
+/// Marca de "ya le busque titulo a este archivo". Las bases creadas antes de
+/// que existiera `session_meta` tienen los offsets al final, asi que el barrido
+/// incremental nunca volveria a ver sus lineas `ai-title`: necesitan una pasada
+/// completa, pero una sola vez.
+const MIGRATIONS: &[&str] =
+    &["ALTER TABLE files ADD COLUMN meta_scanned INTEGER NOT NULL DEFAULT 0"];
+
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let conn = Connection::open(path)?;
-        conn.execute_batch(SCHEMA)?;
-        Ok(Self { conn })
+        Self::prepare(conn)
     }
 
     pub fn open_in_memory() -> Result<Self> {
-        let conn = Connection::open_in_memory()?;
+        Self::prepare(Connection::open_in_memory()?)
+    }
+
+    fn prepare(conn: Connection) -> Result<Self> {
         conn.execute_batch(SCHEMA)?;
+        for m in MIGRATIONS {
+            // Una columna que ya existe da error; es el caso normal tras la
+            // primera vez, no una falla.
+            let _ = conn.execute(m, []);
+        }
         Ok(Self { conn })
+    }
+
+    /// Archivos a los que todavia no se les busco titulo. Requieren una lectura
+    /// completa porque su offset ya esta al final.
+    pub fn needs_meta_scan(&self, path: &str) -> Result<bool> {
+        let scanned: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT meta_scanned FROM files WHERE path = ?1",
+                params![path],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(scanned.unwrap_or(0) == 0)
+    }
+
+    /// Guarda titulo y primer prompt. El titulo se pisa (Claude re-titula), el
+    /// prompt no: interesa el que abrio la sesion.
+    pub fn save_session_meta(
+        &self,
+        session_id: &str,
+        title: Option<&str>,
+        prompt: Option<&str>,
+    ) -> Result<()> {
+        if title.is_none() && prompt.is_none() {
+            return Ok(());
+        }
+        self.conn.execute(
+            "INSERT INTO session_meta (session_id, title, prompt) VALUES (?1, ?2, ?3)
+             ON CONFLICT(session_id) DO UPDATE SET
+                title  = COALESCE(?2, session_meta.title),
+                prompt = COALESCE(session_meta.prompt, ?3)",
+            params![session_id, title, prompt],
+        )?;
+        Ok(())
     }
 
     pub fn cursor_for(&self, path: &str) -> Result<(u64, u64)> {
@@ -157,13 +217,15 @@ impl Store {
             mtime_ms,
             offset,
             compactions_delta,
+            meta_scanned,
         } = *c;
         self.conn.execute(
-            "INSERT INTO files (path, account, project, session_id, size, mtime_ms, offset, compactions)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            "INSERT INTO files (path, account, project, session_id, size, mtime_ms, offset, compactions, meta_scanned)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(path) DO UPDATE SET
                 size = ?5, mtime_ms = ?6, offset = ?7,
-                compactions = CASE WHEN ?7 < files.offset THEN ?8 ELSE files.compactions + ?8 END",
+                compactions = CASE WHEN ?7 <= files.offset THEN ?8 ELSE files.compactions + ?8 END,
+                meta_scanned = MAX(files.meta_scanned, ?9)",
             params![
                 path,
                 account,
@@ -172,7 +234,8 @@ impl Store {
                 size as i64,
                 mtime_ms,
                 offset as i64,
-                compactions_delta
+                compactions_delta,
+                i64::from(meta_scanned)
             ],
         )?;
         Ok(())
@@ -337,8 +400,11 @@ impl Store {
                     CAST(AVG(t.ctx_tok) AS INTEGER),
                     COALESCE((SELECT SUM(fl.compactions) FROM files fl
                               WHERE fl.session_id = t.session_id), 0),
-                    GROUP_CONCAT(DISTINCT COALESCE(t.model, t.raw_model))
-             FROM turns t WHERE {SCOPE}
+                    GROUP_CONCAT(DISTINCT COALESCE(t.model, t.raw_model)),
+                    m.title, m.prompt
+             FROM turns t
+             LEFT JOIN session_meta m ON m.session_id = t.session_id
+             WHERE {SCOPE}
              GROUP BY t.session_id ORDER BY SUM(t.cost_usd) DESC LIMIT ?3"
         ))?;
         let rows = stmt
@@ -357,6 +423,8 @@ impl Store {
                     avg_ctx: r.get(8)?,
                     compactions: r.get(9)?,
                     models: r.get::<_, Option<String>>(10)?.unwrap_or_default(),
+                    title: r.get(11)?,
+                    prompt: r.get(12)?,
                     cost_per_turn: if turns > 0 { cost / turns as f64 } else { 0.0 },
                 })
             })?
@@ -585,6 +653,10 @@ pub struct SessionRow {
     pub avg_ctx: i64,
     pub compactions: i64,
     pub models: String,
+    /// Titulo que Claude Code le puso a la sesion, si lo alcanzo a generar.
+    pub title: Option<String>,
+    /// Primer prompt de la sesion: el respaldo cuando no hay titulo.
+    pub prompt: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -688,11 +760,76 @@ mod tests {
             mtime_ms,
             offset,
             compactions_delta: 1,
+            meta_scanned: false,
         };
         s.save_cursor(&cur(100, 1, 100)).unwrap();
         assert_eq!(s.cursor_for("/x.jsonl").unwrap(), (100, 100));
         s.save_cursor(&cur(200, 2, 200)).unwrap();
         let (off, size) = s.cursor_for("/x.jsonl").unwrap();
         assert_eq!((off, size), (200, 200));
+    }
+
+    #[test]
+    fn releer_desde_cero_no_duplica_compactaciones() {
+        let s = Store::open_in_memory().unwrap();
+        let cur = |offset: u64, delta: u32| FileCursor {
+            path: "/x.jsonl",
+            account: "personal",
+            project: "p",
+            session_id: "s",
+            size: 100,
+            mtime_ms: 1,
+            offset,
+            compactions_delta: delta,
+            meta_scanned: false,
+        };
+        let count = || -> i64 {
+            s.conn
+                .query_row(
+                    "SELECT compactions FROM files WHERE path = '/x.jsonl'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap()
+        };
+        s.save_cursor(&cur(100, 3)).unwrap();
+        assert_eq!(count(), 3);
+        // Segunda pasada leyendo el archivo entero: mismo offset, mismo total.
+        s.save_cursor(&cur(100, 3)).unwrap();
+        assert_eq!(count(), 3, "releer entero recuenta, no suma");
+        // Crecimiento normal: si suma.
+        s.save_cursor(&cur(180, 1)).unwrap();
+        assert_eq!(count(), 4);
+    }
+
+    #[test]
+    fn el_titulo_se_pisa_y_el_prompt_no() {
+        let s = Store::open_in_memory().unwrap();
+        s.save_session_meta("s1", Some("Primer tema"), Some("hola"))
+            .unwrap();
+        s.save_session_meta("s1", Some("Segundo tema"), Some("otro prompt"))
+            .unwrap();
+        let (t, p): (Option<String>, Option<String>) = s
+            .conn
+            .query_row(
+                "SELECT title, prompt FROM session_meta WHERE session_id = 's1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(t.as_deref(), Some("Segundo tema"));
+        assert_eq!(p.as_deref(), Some("hola"));
+
+        // Un scan sin titulo no borra el que ya habia.
+        s.save_session_meta("s1", None, None).unwrap();
+        let t2: Option<String> = s
+            .conn
+            .query_row(
+                "SELECT title FROM session_meta WHERE session_id = 's1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(t2.as_deref(), Some("Segundo tema"));
     }
 }

@@ -231,8 +231,28 @@ fn print_sessions(db: &Store, f: &Filter, n: i64) -> Result<()> {
             s.session_id,
             s.models
         );
+        println!("      \u{2192} {}", describe(&s));
     }
     Ok(())
+}
+
+/// De que trata la sesion: el titulo que le puso Claude Code, o el primer
+/// prompt recortado cuando no alcanzo a generarlo.
+fn describe(s: &burn_core::store::SessionRow) -> String {
+    if let Some(t) = s.title.as_deref().filter(|t| !t.is_empty()) {
+        return t.to_string();
+    }
+    match s.prompt.as_deref().filter(|p| !p.is_empty()) {
+        Some(p) => {
+            let one: String = p.split_whitespace().collect::<Vec<_>>().join(" ");
+            if one.chars().count() > 90 {
+                format!("{}...", one.chars().take(90).collect::<String>())
+            } else {
+                one
+            }
+        }
+        None => "(sin titulo)".to_string(),
+    }
 }
 
 fn print_timeline(db: &Store, session_id: &str) -> Result<()> {

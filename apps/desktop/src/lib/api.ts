@@ -98,6 +98,10 @@ export type SessionRow = {
   avg_ctx: number;
   compactions: number;
   models: string;
+  /// Titulo que Claude Code le genero a la sesion, si alcanzo a hacerlo.
+  title: string | null;
+  /// Primer prompt de la sesion: el respaldo cuando no hay titulo.
+  prompt: string | null;
   /// `false` cuando la cuenta es de tarifa plana: el $ es consumo, no factura.
   is_billable: boolean;
 };

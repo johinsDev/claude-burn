@@ -59,13 +59,26 @@ pub fn sync(db: &mut Store, profiles: &[Profile]) -> Result<SyncReport> {
                 continue;
             };
             let size = md.len();
-            if size == stored_size && stored_offset > 0 {
+            let needs_meta = db.needs_meta_scan(&path_str)?;
+            if size == stored_size && stored_offset > 0 && !needs_meta {
                 continue;
             }
             report.files_changed += 1;
 
-            let from = ingest::resume_offset(&file.path, stored_offset);
+            // Si al archivo nunca se le busco titulo, hay que leerlo entero:
+            // las lineas `ai-title` estan detras del offset guardado. Es una
+            // sola vez por archivo, no en cada pasada.
+            let from = if needs_meta {
+                0
+            } else {
+                ingest::resume_offset(&file.path, stored_offset)
+            };
             let scan = ingest::read_incremental(&file, &profile.name, from)?;
+            db.save_session_meta(
+                &file.session_id,
+                scan.title.as_deref(),
+                scan.first_prompt.as_deref(),
+            )?;
 
             let new = db.insert_turns(&scan.turns)?;
             report.turns_new += new;
@@ -92,6 +105,7 @@ pub fn sync(db: &mut Store, profiles: &[Profile]) -> Result<SyncReport> {
                 mtime_ms,
                 offset: scan.new_offset,
                 compactions_delta: scan.compactions,
+                meta_scanned: from == 0,
             })?;
         }
     }

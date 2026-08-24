@@ -23,6 +23,16 @@ fn finder_compact() -> &'static memmem::Finder<'static> {
     F.get_or_init(|| memmem::Finder::new(b"\"isCompactSummary\""))
 }
 
+fn finder_title() -> &'static memmem::Finder<'static> {
+    static F: OnceLock<memmem::Finder<'static>> = OnceLock::new();
+    F.get_or_init(|| memmem::Finder::new(b"\"aiTitle\""))
+}
+
+fn finder_prompt() -> &'static memmem::Finder<'static> {
+    static F: OnceLock<memmem::Finder<'static>> = OnceLock::new();
+    F.get_or_init(|| memmem::Finder::new(b"\"lastPrompt\""))
+}
+
 #[derive(Debug)]
 pub struct TranscriptFile {
     pub path: PathBuf,
@@ -108,6 +118,11 @@ pub struct ScanResult {
     pub new_offset: u64,
     pub lines_seen: u64,
     pub unknown_models: Vec<String>,
+    /// Titulo que Claude Code le puso a la sesion (`ai-title`). Gana el ultimo
+    /// visto: Claude re-titula a medida que la sesion cambia de tema.
+    pub title: Option<String>,
+    /// Primer prompt de la sesion, como respaldo cuando no hay titulo.
+    pub first_prompt: Option<String>,
 }
 
 /// Lee un transcript desde `from_offset` y devuelve los turnos nuevos.
@@ -144,7 +159,9 @@ pub fn read_incremental(
 
         let has_assistant = finder_assistant().find(&buf).is_some();
         let has_compact = finder_compact().find(&buf).is_some();
-        if !has_assistant && !has_compact {
+        let has_title = finder_title().find(&buf).is_some();
+        let has_prompt = finder_prompt().find(&buf).is_some();
+        if !has_assistant && !has_compact && !has_title && !has_prompt {
             continue;
         }
 
@@ -154,6 +171,24 @@ pub fn read_incremental(
 
         if has_compact && line.is_compact_summary == Some(true) {
             out.compactions += 1;
+        }
+        if let Some(t) = line
+            .ai_title
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+        {
+            out.title = Some(t.to_string());
+        }
+        if out.first_prompt.is_none() {
+            if let Some(p) = line
+                .last_prompt
+                .as_deref()
+                .map(str::trim)
+                .filter(|p| !p.is_empty())
+            {
+                out.first_prompt = Some(p.to_string());
+            }
         }
         if line.kind.as_deref() != Some("assistant") {
             continue;

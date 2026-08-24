@@ -127,6 +127,12 @@ pub struct RawLine {
     pub is_compact_summary: Option<bool>,
     #[serde(default)]
     pub version: Option<String>,
+    /// Titulo generado por Claude Code para la sesion (lineas `ai-title`).
+    #[serde(default)]
+    pub ai_title: Option<String>,
+    /// Prompt del usuario en el punto de retome (lineas `last-prompt`).
+    #[serde(default)]
+    pub last_prompt: Option<String>,
     #[serde(default)]
     pub message: Option<RawMessage>,
 }

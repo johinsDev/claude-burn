@@ -98,3 +98,19 @@ export function projectName(slug: string): string {
 export function shortDate(iso: string): string {
   return iso.slice(0, 10);
 }
+
+/**
+ * De que trata una sesion. Claude Code le pone titulo a casi todas
+ * (`ai-title`); cuando no llego a hacerlo, el primer prompt dice lo mismo con
+ * mas ruido, y recien despues cae al proyecto.
+ */
+export function sessionTitle(s: {
+  title: string | null;
+  prompt: string | null;
+  project: string;
+}): { text: string; kind: "title" | "prompt" | "project" } {
+  if (s.title?.trim()) return { text: s.title.trim(), kind: "title" };
+  const prompt = s.prompt?.replace(/\s+/g, " ").trim();
+  if (prompt) return { text: prompt, kind: "prompt" };
+  return { text: projectName(s.project), kind: "project" };
+}

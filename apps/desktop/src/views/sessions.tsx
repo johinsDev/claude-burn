@@ -2,7 +2,15 @@ import { useMemo, useState } from "react";
 import { api, buildFilter, type SessionRow } from "@/lib/api";
 import type { Scope } from "@/components/ui/filter-bar";
 import { Badge, Empty, Panel, PanelHead } from "@/components/ui/primitives";
-import { contextTone, money, projectName, shortDate, tokens, toneClass } from "@/lib/format";
+import {
+  contextTone,
+  money,
+  projectName,
+  sessionTitle,
+  shortDate,
+  tokens,
+  toneClass,
+} from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { SessionDetail } from "@/views/session-detail";
 import { useAsyncData } from "@/hooks/use-async-data";
@@ -19,19 +27,26 @@ const COLUMNS: { key: SortKey; label: string; width: string }[] = [
 
 export function Sessions({ scope }: { scope: Scope }) {
   const [sort, setSort] = useState<SortKey>("cost_usd");
+  const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<SessionRow | null>(null);
   const { data: rows, loading } = useAsyncData(
     () => api.sessions(buildFilter(scope.period, scope.account)),
     [scope.period, scope.account],
   );
 
-  const visible = useMemo(
-    () =>
-      (rows ?? []).toSorted((a, b) =>
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const matches = (r: SessionRow) =>
+      !q ||
+      sessionTitle(r).text.toLowerCase().includes(q) ||
+      r.project.toLowerCase().includes(q) ||
+      r.account.toLowerCase().includes(q);
+    return (rows ?? [])
+      .filter(matches)
+      .toSorted((a, b) =>
         sort === "last_ts" ? b.last_ts.localeCompare(a.last_ts) : b[sort] - a[sort],
-      ),
-    [rows, sort],
-  );
+      );
+  }, [rows, sort, query]);
 
   const hasFlatRate = visible.some((r) => !r.is_billable);
 
@@ -40,7 +55,17 @@ export function Sessions({ scope }: { scope: Scope }) {
   return (
     <>
       <Panel className="overflow-hidden">
-        <PanelHead title={`${visible.length} sesiones`} />
+        <PanelHead
+          title={`${visible.length} sesiones`}
+          right={
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="buscar por titulo o proyecto…"
+              className="w-56 rounded border border-line bg-panel-2 px-2 py-1 text-[11px] text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint"
+            />
+          }
+        />
         {hasFlatRate ? (
           <p className="border-b border-line bg-panel-2/40 px-3.5 py-2 text-[10.5px] leading-snug text-ink-faint">
             Los costos con <span className="text-ink-dim">≈</span> son de cuentas
@@ -70,7 +95,7 @@ export function Sessions({ scope }: { scope: Scope }) {
                     </button>
                   </th>
                 ))}
-                <th className="px-2 py-2 text-left font-medium">proyecto</th>
+                <th className="px-2 py-2 text-left font-medium">sesion</th>
                 <th className="px-2 py-2 text-left font-medium">modelos</th>
               </tr>
             </thead>
@@ -107,9 +132,8 @@ export function Sessions({ scope }: { scope: Scope }) {
                     <td className="num px-2 py-1.5 text-right text-ink-faint">
                       {shortDate(r.last_ts)}
                     </td>
-                    <td className="max-w-56 truncate px-2 py-1.5">
-                      <span className="text-ink-dim">{r.account}</span>{" "}
-                      {projectName(r.project)}
+                    <td className="max-w-[22rem] px-2 py-1.5">
+                      <SessionLabel row={r} />
                     </td>
                     <td className="px-2 py-1.5">
                       <div className="flex flex-wrap gap-1">
@@ -135,6 +159,28 @@ export function Sessions({ scope }: { scope: Scope }) {
         <SessionDetail session={selected} onClose={() => setSelected(null)} />
       ) : null}
     </>
+  );
+}
+
+/**
+ * Que se ve de una sesion en la tabla: de que trata arriba, donde corrio
+ * abajo. El titulo es lo que permite reconocerla; el proyecto solo, no.
+ */
+function SessionLabel({ row }: { row: SessionRow }) {
+  const { text, kind } = sessionTitle(row);
+  return (
+    <div className="min-w-0">
+      <div
+        className={cn("truncate", kind === "project" && "italic text-ink-faint")}
+        title={text}
+      >
+        {text}
+      </div>
+      <div className="truncate text-[10px] text-ink-faint">
+        {row.account} · {projectName(row.project)}
+        {kind === "prompt" ? " · sin titulo, muestro el primer prompt" : ""}
+      </div>
+    </div>
   );
 }
 
