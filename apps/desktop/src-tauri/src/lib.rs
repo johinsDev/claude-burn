@@ -12,14 +12,24 @@ mod watcher;
 use state::AppState;
 use tauri::{Manager, WindowEvent};
 
+/// Marca que el sistema arranco la app sola al iniciar sesion.
+const AUTOSTART_FLAG: &str = "--autostart";
+
 pub fn run() {
     tauri::Builder::default()
+        // Va primero, como pide el plugin. Sin esto un segundo doble-click
+        // arranca *otra* copia: dos iconos en la barra, dos watchers
+        // escribiendo la misma base y las alertas duplicadas.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // La copia que ya corria es la que le contesta al usuario.
+            commands::reveal_main_window(app);
+        }))
         .plugin(tauri_plugin_opener::init())
-        // Sin argumentos al arrancar: la app decide sola que mostrar segun
-        // si es el primer arranque.
+        // El arranque automatico se marca con un argumento para poder
+        // distinguirlo de un doble-click: uno arranca escondido, el otro no.
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
+            Some(vec![AUTOSTART_FLAG]),
         ))
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
@@ -48,28 +58,22 @@ pub fn run() {
             tray::refresh_tray(app.handle());
             watcher::spawn(app.handle().clone());
 
-            // En el primer arranque se abre la ventana: si no, el usuario
-            // lanza la app y no ve nada mas que un icono chico en la barra.
-            let first_run = {
+            {
                 let state = app.state::<AppState>();
                 let db = state.db.lock().unwrap();
-                let seen = db.get_setting("onboarded").ok().flatten().is_some();
-                if !seen {
-                    let _ = db.set_setting("onboarded", "1");
-                }
-                !seen
-            };
-
-            #[cfg(target_os = "macos")]
-            if !first_run {
-                // Sin icono en el Dock: esto vive en la barra de menu.
-                app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+                let _ = db.set_setting("onboarded", "1");
             }
-            if first_run {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
+
+            // Si el usuario abrio la app a mano, quiere ver algo. Antes se
+            // guardaba un flag `onboarded` y a partir del segundo arranque la
+            // app se escondia siempre: sin ventana, sin icono en el Dock, el
+            // doble-click no hacia *nada* visible y parecia que no abria.
+            // Ahora lo unico que arranca escondido es el autostart.
+            if std::env::args().any(|a| a == AUTOSTART_FLAG) {
+                #[cfg(target_os = "macos")]
+                app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            } else {
+                commands::reveal_main_window(app.handle());
             }
 
             Ok(())

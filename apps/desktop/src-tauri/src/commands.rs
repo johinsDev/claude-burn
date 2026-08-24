@@ -289,22 +289,34 @@ pub fn set_budget(
         .map_err(err)
 }
 
-/// Trae la ventana principal al frente y esconde el popover.
-#[tauri::command]
-pub fn show_main_window(app: AppHandle) -> Res<()> {
+/// Abre la ventana principal y la trae al frente.
+///
+/// No es un comando: lo llaman tanto el frontend (via `show_main_window`)
+/// como el arranque y el guard de instancia unica, que no tienen `Res<()>`
+/// donde poner un error.
+pub fn reveal_main_window(app: &AppHandle) {
     if let Some(tray) = app.get_webview_window("tray") {
         let _ = tray.hide();
     }
-    let main = app
-        .get_webview_window("main")
-        .ok_or_else(|| "no existe la ventana principal".to_string())?;
-    main.show().map_err(err)?;
-    main.unminimize().map_err(err)?;
-    main.set_focus().map_err(err)?;
     // Con ActivationPolicy::Accessory la app no roba el foco sola; hay que
-    // pedirle a macOS que la ponga adelante explicitamente.
+    // pedirle a macOS que la ponga adelante explicitamente, y *antes* de
+    // mostrar la ventana para que aparezca ya al frente.
     #[cfg(target_os = "macos")]
     let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.show();
+        let _ = main.unminimize();
+        let _ = main.set_focus();
+    }
+}
+
+/// Trae la ventana principal al frente y esconde el popover.
+#[tauri::command]
+pub fn show_main_window(app: AppHandle) -> Res<()> {
+    if app.get_webview_window("main").is_none() {
+        return Err("no existe la ventana principal".to_string());
+    }
+    reveal_main_window(&app);
     Ok(())
 }
 

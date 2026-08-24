@@ -24,3 +24,4 @@ anyhow.workspace = true
 chrono.workspace = true
 notify.workspace = true
 tauri-plugin-autostart = "2.5.1"
+tauri-plugin-single-instance = "2"
