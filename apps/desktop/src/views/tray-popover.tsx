@@ -86,6 +86,36 @@ export function TrayPopover() {
           </p>
         ) : null}
 
+        {data.month.budget_usd ? (
+          <div className="space-y-1 rounded border border-line bg-panel-2/40 p-2">
+            <div className="flex items-baseline justify-between">
+              <span className="text-[11px] text-ink-dim">
+                Mes · techo {money(data.month.budget_usd)}
+              </span>
+              <span
+                className={cn(
+                  "num text-[11px] font-semibold",
+                  toneClass[monthTone(data.month.spent_usd, data.month.budget_usd)],
+                )}
+              >
+                {((data.month.spent_usd / data.month.budget_usd) * 100).toFixed(0)}%
+              </span>
+            </div>
+            <Meter
+              value={Math.min((data.month.spent_usd / data.month.budget_usd) * 100, 100)}
+              tone={monthTone(data.month.spent_usd, data.month.budget_usd)}
+            />
+            <div className="flex justify-between text-[10px] text-ink-faint">
+              <span>{money(data.month.spent_usd)} facturado</span>
+              <span>
+                {data.month.daily_allowance_usd === 0
+                  ? "techo pasado"
+                  : `${money(data.month.daily_allowance_usd ?? 0)} por dia`}
+              </span>
+            </div>
+          </div>
+        ) : null}
+
         {/* Facturado, igual que el titular. Sumar la tarifa plana aca hacia
             que estos dos numeros no significaran nada. */}
         <div className="grid grid-cols-2 gap-2">
@@ -218,4 +248,9 @@ function limitLabel(kind: string): string {
     default:
       return kind;
   }
+}
+
+/** El techo mensual pintado como el resto de los medidores. */
+function monthTone(spent: number, budget: number): "ok" | "warn" | "hot" | "crit" {
+  return limitTone((spent / budget) * 100);
 }

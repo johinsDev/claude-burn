@@ -482,6 +482,20 @@ impl Store {
         )?)
     }
 
+    /// Gasto del mes calendario (`YYYY-MM`).
+    ///
+    /// No son "los ultimos 30 dias": Anthropic factura por mes calendario, y
+    /// una ventana movil nunca se reinicia, asi que un techo mensual medido
+    /// asi avisaria tarde y no volveria a cero el dia 1.
+    pub fn cost_in_month(&self, month: &str, account: Option<&str>) -> Result<f64> {
+        Ok(self.conn.query_row(
+            "SELECT COALESCE(SUM(cost_usd), 0) FROM turns
+             WHERE month = ?1 AND (?2 IS NULL OR account = ?2)",
+            params![month, account],
+            |r| r.get(0),
+        )?)
+    }
+
     /// Cuanto del gasto se lo llevaron los subagentes.
     ///
     /// Sus turnos viven en transcripts aparte

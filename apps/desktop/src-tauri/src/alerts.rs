@@ -10,6 +10,12 @@ const CONFIG_KEY: &str = "alert_config";
 
 pub fn load_config(state: &AppState) -> AlertConfig {
     let db = state.db.lock().unwrap();
+    config_from_db(&db)
+}
+
+/// La misma lectura pero con la base ya tomada, para quien no puede volver a
+/// pedir el lock sin trabarse.
+pub fn config_from_db(db: &burn_core::store::Store) -> AlertConfig {
     db.get_setting(CONFIG_KEY)
         .ok()
         .flatten()
@@ -55,11 +61,18 @@ fn snapshot(state: &AppState) -> anyhow::Result<Snapshot> {
     Ok(Snapshot {
         today_usd: sum_over(&|a| db.cost_on_day(&today, Some(a)))?,
         week_usd: sum_over(&|a| db.cost_since(&since(7), Some(a)))?,
-        month_usd: sum_over(&|a| db.cost_since(&since(30), Some(a)))?,
+        // Mes calendario, no ventana movil: es como factura Anthropic y es lo
+        // unico que se reinicia el dia 1.
+        month_usd: sum_over(&|a| db.cost_in_month(&this_month(), Some(a)))?,
         live,
         plans,
         today_by_model: db.cost_by_model_on_day(&today)?,
     })
+}
+
+/// El mes calendario en curso, `YYYY-MM`, en hora local.
+pub fn this_month() -> String {
+    chrono::Local::now().format("%Y-%m").to_string()
 }
 
 fn since(days: i64) -> String {

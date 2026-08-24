@@ -80,6 +80,7 @@ export type Overview = {
   month_usd: number;
   month_billable_usd: number;
   subagents: SubagentSplit;
+  month: MonthPace;
   by_day: DayRow[];
   by_month: MonthRow[];
   composition: Composition;
@@ -87,6 +88,19 @@ export type Overview = {
   known_accounts: string[];
   data_from: string | null;
   data_to: string | null;
+};
+
+/** El mes calendario medido contra el techo mensual. */
+export type MonthPace = {
+  month: string;
+  spent_usd: number;
+  budget_usd: number | null;
+  day: number;
+  days_in_month: number;
+  /// A donde llega el mes si se sigue al ritmo de lo que va.
+  projected_usd: number;
+  /// Lo que queda del techo repartido en los dias que faltan.
+  daily_allowance_usd: number | null;
 };
 
 /** Cuanto del gasto se lo llevaron los subagentes, que se facturan aparte. */

@@ -35,6 +35,10 @@ pub struct TraySummary {
     pub today_usd: f64,
     /// Solo el gasto de cuentas con overage: la plata que realmente se factura.
     pub today_billable_usd: f64,
+    /// Gasto facturable del mes calendario en curso.
+    pub month_billable_usd: f64,
+    /// Techo mensual configurado, si hay uno.
+    pub month_budget_usd: Option<f64>,
     pub worst_limit_pct: Option<f64>,
     pub worst_limit_kind: Option<String>,
     pub live_sessions: usize,
@@ -50,6 +54,12 @@ impl TraySummary {
         } else {
             format!("${:.1}", self.today_billable_usd)
         };
+        // Con un techo mensual, el porcentaje que importa es ese. El del plan
+        // sale de la cuenta de tarifa plana y no dice nada sobre la factura.
+        if let Some(budget) = self.month_budget_usd.filter(|b| *b > 0.0) {
+            let pct = self.month_billable_usd / budget * 100.0;
+            return format!("{money} · {pct:.0}% mes");
+        }
         match self.worst_limit_pct {
             Some(p) => format!("{money} · {p:.0}%"),
             None => money,

@@ -14,6 +14,7 @@ import {
   compositionRows,
   compositionTotal,
   type Billing,
+  type MonthPace,
   type Overview as OverviewData,
   type SubagentSplit,
 } from "@/lib/api";
@@ -175,6 +176,8 @@ export function Overview({ data }: { data: OverviewData }) {
         </Panel>
       </div>
 
+      <MonthBudgetPanel pace={data.month} />
+
       <SubagentPanel split={data.subagents} />
 
       <div className="grid grid-cols-2 gap-3">
@@ -252,6 +255,89 @@ export function Overview({ data }: { data: OverviewData }) {
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * El mes contra el techo. Es la pantalla que contesta "no quiero pasarme de
+ * X al mes": cuanto va, a donde llega si sigo asi, y cuanto puedo gastar por
+ * dia de aca al cierre.
+ */
+function MonthBudgetPanel({ pace }: { pace: MonthPace }) {
+  const { budget_usd: budget, spent_usd: spent, projected_usd: projected } = pace;
+  if (!budget) {
+    return (
+      <Panel>
+        <PanelHead title={`Mes ${pace.month}`} />
+        <div className="grid grid-cols-3 divide-x divide-line">
+          <Stat label="Facturado en el mes" value={money(spent)} />
+          <Stat
+            label="Proyeccion al cierre"
+            value={money(projected, { compact: true })}
+            sub={`al ritmo de los primeros ${pace.day} dias`}
+          />
+          <Stat
+            label="Techo mensual"
+            value="sin definir"
+            sub="ponelo en Alertas → Presupuesto"
+          />
+        </div>
+      </Panel>
+    );
+  }
+
+  const share = spent / budget;
+  const projShare = projected / budget;
+  const tone = share >= 1 ? "text-crit" : share >= 0.75 ? "text-warn" : undefined;
+  const left = budget - spent;
+
+  return (
+    <Panel>
+      <PanelHead
+        title={`Mes ${pace.month} · techo ${money(budget)}`}
+        right={
+          <span className={cn("num text-[11px] font-semibold", tone)}>
+            {(share * 100).toFixed(0)}%
+          </span>
+        }
+      />
+      <div className="space-y-2 px-3.5 pb-3 pt-2.5">
+        <Meter value={Math.min(share * 100, 100)} tone={share >= 1 ? "crit" : share >= 0.75 ? "warn" : "ok"} />
+        <div className="flex justify-between text-[10px] text-ink-faint">
+          <span>
+            dia {pace.day} de {pace.days_in_month}
+          </span>
+          <span>
+            {left >= 0
+              ? `${money(left)} disponibles`
+              : `${money(-left)} por encima del techo`}
+          </span>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 divide-x divide-line border-t border-line">
+        <Stat label="Facturado en el mes" value={money(spent)} tone={tone} />
+        <Stat
+          label="Proyeccion al cierre"
+          value={money(projected, { compact: true })}
+          tone={projShare >= 1 ? "text-crit" : undefined}
+          sub={`${(projShare * 100).toFixed(0)}% del techo al ritmo actual`}
+        />
+        <Stat
+          label="Podes gastar por dia"
+          value={
+            pace.daily_allowance_usd === null
+              ? "—"
+              : money(pace.daily_allowance_usd)
+          }
+          tone={pace.daily_allowance_usd === 0 ? "text-crit" : undefined}
+          sub={
+            pace.daily_allowance_usd === 0
+              ? "el techo ya se paso"
+              : `en los ${Math.max(pace.days_in_month - pace.day, 1)} dias que quedan`
+          }
+        />
+      </div>
+    </Panel>
   );
 }
 

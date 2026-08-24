@@ -44,6 +44,9 @@ pub struct Overview {
     pub month_billable_usd: f64,
     /// Cuanto del gasto se lo llevaron los subagentes.
     pub subagents: SubagentSplit,
+    /// El mes calendario contra el techo: gastado, proyeccion y cuanto queda
+    /// por dia. Es la respuesta a "no quiero pasarme de X al mes".
+    pub month: MonthPace,
     pub by_day: Vec<DayRow>,
     pub by_month: Vec<MonthRow>,
     pub composition: Composition,
@@ -54,6 +57,59 @@ pub struct Overview {
     /// que el historico no arranca donde el usuario cree.
     pub data_from: Option<String>,
     pub data_to: Option<String>,
+}
+
+/// El mes calendario medido contra el techo mensual.
+///
+/// Anthropic factura por mes calendario, asi que la ventana movil de 30 dias
+/// no sirve para un techo: nunca vuelve a cero.
+#[derive(Serialize)]
+pub struct MonthPace {
+    pub month: String,
+    /// Gasto facturable del mes hasta ahora.
+    pub spent_usd: f64,
+    pub budget_usd: Option<f64>,
+    pub day: u32,
+    pub days_in_month: u32,
+    /// A donde llega el mes si se sigue al ritmo promedio de lo que va.
+    pub projected_usd: f64,
+    /// Lo que queda del techo repartido en los dias que faltan. `None` sin
+    /// techo, `Some(0.0)` cuando ya se paso.
+    pub daily_allowance_usd: Option<f64>,
+}
+
+fn month_pace(spent_usd: f64, budget_usd: Option<f64>) -> MonthPace {
+    use chrono::Datelike;
+    let now = chrono::Local::now();
+    let day = now.day();
+    let days_in_month = days_in_month(now.year(), now.month());
+    // El promedio se toma sobre los dias transcurridos, contando el de hoy
+    // aunque este a medias: subestimar el ritmo seria el error caro.
+    let projected_usd = spent_usd / f64::from(day) * f64::from(days_in_month);
+    let daily_allowance_usd = budget_usd.map(|b| {
+        let left_days = f64::from(days_in_month.saturating_sub(day).max(1));
+        ((b - spent_usd) / left_days).max(0.0)
+    });
+    MonthPace {
+        month: now.format("%Y-%m").to_string(),
+        spent_usd,
+        budget_usd,
+        day,
+        days_in_month,
+        projected_usd,
+        daily_allowance_usd,
+    }
+}
+
+fn days_in_month(year: i32, month: u32) -> u32 {
+    let (y, m) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
+    chrono::NaiveDate::from_ymd_opt(y, m, 1)
+        .and_then(|d| d.pred_opt())
+        .map_or(30, |d| chrono::Datelike::day(&d))
 }
 
 /// Los totales se acumulan por cuenta y no de una sola consulta, porque cada
@@ -100,7 +156,9 @@ pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overv
 
     let today = day_string(0);
     let (week_from, month_from) = (utc_since(7), utc_since(30));
+    let this_month = crate::alerts::this_month();
     let mut totals = Totals::default();
+    let mut month_billable = 0.0;
 
     let mut accounts = Vec::new();
     let mut live_total = 0usize;
@@ -114,6 +172,9 @@ pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overv
             db.cost_since(&week_from, Some(&p.name))?,
             db.cost_since(&month_from, Some(&p.name))?,
         );
+        if is_billable {
+            month_billable += db.cost_in_month(&this_month, Some(&p.name))?;
+        }
 
         let plan_usage = profiles::read_plan_usage(p);
         if let Some(u) = &plan_usage {
@@ -157,9 +218,15 @@ pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overv
         .filter_map(|pts| pts.last().map(|p| p.ctx_tok))
         .max();
 
+    let month_budget = crate::alerts::config_from_db(&db)
+        .budget_monthly_usd
+        .filter(|l| *l > 0.0);
+
     let tray = TraySummary {
         today_usd: totals.today,
         today_billable_usd: totals.today_billable,
+        month_billable_usd: month_billable,
+        month_budget_usd: month_budget,
         worst_limit_pct,
         worst_limit_kind,
         live_sessions: live_total,
@@ -175,6 +242,7 @@ pub fn build_overview(state: &AppState, filter: &Filter) -> anyhow::Result<Overv
         month_usd: totals.month,
         month_billable_usd: totals.month_billable,
         subagents: db.subagent_split(filter)?,
+        month: month_pace(month_billable, month_budget),
         by_day: db.by_day(filter, 120)?,
         by_month: db.by_month()?,
         composition: db.composition(filter)?,
@@ -373,4 +441,39 @@ pub struct FiredAlert {
     pub kind: String,
     pub fired_at_ms: i64,
     pub alert: serde_json::Value,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dias_del_mes_incluye_febrero_bisiesto() {
+        assert_eq!(days_in_month(2026, 2), 28);
+        assert_eq!(days_in_month(2028, 2), 29);
+        assert_eq!(days_in_month(2026, 12), 31);
+        assert_eq!(days_in_month(2026, 4), 30);
+    }
+
+    #[test]
+    fn el_ritmo_proyecta_sobre_los_dias_transcurridos() {
+        // Mismo calculo que month_pace, con el dia fijo para poder afirmarlo.
+        let (spent, day, days) = (300.0_f64, 10_u32, 30_u32);
+        let projected = spent / f64::from(day) * f64::from(days);
+        assert_eq!(projected, 900.0);
+
+        // Lo que queda se reparte entre los dias que faltan, no entre todos.
+        let budget = 1000.0_f64;
+        let allowance = (budget - spent) / f64::from(days - day);
+        assert_eq!(allowance, 35.0);
+    }
+
+    #[test]
+    fn pasarse_del_techo_deja_el_diario_en_cero_y_no_en_negativo() {
+        let (spent, budget, day, days) = (4920.0_f64, 1000.0_f64, 24_u32, 31_u32);
+        let allowance = ((budget - spent) / f64::from(days - day)).max(0.0);
+        assert_eq!(allowance, 0.0, "un diario negativo no significa nada");
+        let projected = spent / f64::from(day) * f64::from(days);
+        assert!(projected > budget * 6.0);
+    }
 }
