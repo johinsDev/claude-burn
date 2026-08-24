@@ -4,6 +4,16 @@
   "private": true,
   "type": "module",
   "main": "./index.ts",
-  "exports": { ".": "./index.ts", "./pricing.json": "./pricing.json" },
-  "scripts": { "lint": "oxlint .", "typecheck": "tsc --noEmit" }
+  "exports": {
+    ".": "./index.ts",
+    "./pricing.json": "./pricing.json"
+  },
+  "scripts": {
+    "lint": "oxlint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@claude-burn/config": "workspace:*",
+    "typescript": "^5.7.2"
+  }
 }

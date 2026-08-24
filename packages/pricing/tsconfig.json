@@ -1,4 +1,12 @@
 {
   "extends": "@claude-burn/config/tsconfig.base.json",
-  "include": ["*.ts"]
+  "compilerOptions": {
+    "lib": [
+      "ES2023"
+    ],
+    "types": []
+  },
+  "include": [
+    "*.ts"
+  ]
 }

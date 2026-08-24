@@ -93,7 +93,14 @@ importers:
 
   packages/config: {}
 
-  packages/pricing: {}
+  packages/pricing:
+    devDependencies:
+      '@claude-burn/config':
+        specifier: workspace:*
+        version: link:../config
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
 
 packages:
 
