@@ -95,6 +95,8 @@ export type SessionRow = {
   avg_ctx: number;
   compactions: number;
   models: string;
+  /// `false` cuando la cuenta es de tarifa plana: el $ es consumo, no factura.
+  is_billable: boolean;
 };
 
 export type TurnPoint = {
@@ -104,6 +106,10 @@ export type TurnPoint = {
   model: string;
   out_tok: number;
   effort: string | null;
+  read_tok: number;
+  cost_read: number;
+  cost_output: number;
+  agent_id: string | null;
 };
 
 export type AlertConfig = {

@@ -62,15 +62,29 @@ export function ago(ms: number | null | undefined): string {
   return `hace ${Math.floor(h / 24)} d`;
 }
 
-/** Tiempo hasta un ISO futuro, para los reinicios de limite. */
-export function until(iso: string | null | undefined): string {
-  if (!iso) return "";
+/**
+ * Estado de un limite del plan segun su fecha de reinicio.
+ *
+ * Cuando `resets_at` ya paso, el porcentaje del cache es de *antes* del
+ * reinicio: no es tu consumo actual sino un numero muerto. Decirlo importa —
+ * mostrar "15%" sin aclararlo hace creer que es el dato de hoy.
+ */
+export function resetState(iso: string | null | undefined): {
+  stale: boolean;
+  label: string;
+} {
+  if (!iso) return { stale: false, label: "" };
   const diff = new Date(iso).getTime() - Date.now();
-  if (diff <= 0) return "reiniciado";
+  if (diff <= 0) {
+    return { stale: true, label: "ya reinicio · dato viejo" };
+  }
   const h = Math.floor(diff / 3_600_000);
   const m = Math.floor((diff % 3_600_000) / 60_000);
-  if (h >= 24) return `en ${Math.floor(h / 24)} d`;
-  return h > 0 ? `en ${h} h ${m} min` : `en ${m} min`;
+  if (h >= 24) return { stale: false, label: `reinicia en ${Math.floor(h / 24)} d` };
+  return {
+    stale: false,
+    label: h > 0 ? `reinicia en ${h} h ${m} min` : `reinicia en ${m} min`,
+  };
 }
 
 /** El slug de proyecto es la ruta con guiones; queda el nombre final. */

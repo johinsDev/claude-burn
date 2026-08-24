@@ -338,7 +338,8 @@ impl Store {
     /// Es el grafico que contesta "en que sesiones me doy garra".
     pub fn session_timeline(&self, session_id: &str) -> Result<Vec<TurnPoint>> {
         let mut stmt = self.conn.prepare(
-            "SELECT ts, ctx_tok, cost_usd, COALESCE(model, raw_model), out_tok, effort
+            "SELECT ts, ctx_tok, cost_usd, COALESCE(model, raw_model), out_tok, effort,
+                    read_tok, cost_read, cost_output, agent_id
              FROM turns WHERE session_id = ?1 ORDER BY ts",
         )?;
         let rows = stmt
@@ -350,6 +351,10 @@ impl Store {
                     model: r.get(3)?,
                     out_tok: r.get(4)?,
                     effort: r.get(5)?,
+                    read_tok: r.get(6)?,
+                    cost_read: r.get(7)?,
+                    cost_output: r.get(8)?,
+                    agent_id: r.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -560,6 +565,14 @@ pub struct TurnPoint {
     pub model: String,
     pub out_tok: i64,
     pub effort: Option<String>,
+    /// Tokens leidos del cache en este turno.
+    pub read_tok: i64,
+    /// El costo partido en sus dos mitades: lo que costo releer y lo que costo
+    /// escribir. Es el desglose que explica de donde sale el $ por turno.
+    pub cost_read: f64,
+    pub cost_output: f64,
+    /// `Some(id)` si el turno lo genero un subagente y no la sesion principal.
+    pub agent_id: Option<String>,
 }
 
 #[cfg(test)]

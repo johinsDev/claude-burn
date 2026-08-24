@@ -35,6 +35,8 @@ export function Sessions() {
     );
   }, [rows, sort, account]);
 
+  const hasFlatRate = visible.some((r) => !r.is_billable);
+
   if (loading) return <Empty>cargando sesiones…</Empty>;
 
   return (
@@ -61,6 +63,14 @@ export function Sessions() {
             </div>
           }
         />
+        {hasFlatRate ? (
+          <p className="border-b border-line bg-panel-2/40 px-3.5 py-2 text-[10.5px] leading-snug text-ink-faint">
+            Los costos con <span className="text-ink-dim">≈</span> son de cuentas
+            de tarifa plana: es el valor de API que consumiste, no plata que te
+            cobran. Sirve para comparar sesiones entre si — y porque el mismo
+            habito en una cuenta con overage si se factura.
+          </p>
+        ) : null}
         <div className="max-h-[calc(100vh-190px)] overflow-y-auto">
           <table className="w-full text-[11.5px]">
             <thead className="sticky top-0 z-10 bg-panel">
@@ -95,10 +105,21 @@ export function Sessions() {
                     onClick={() => setSelected(r)}
                     className="cursor-pointer border-b border-line/50 transition-colors hover:bg-panel-2"
                   >
-                    <td className="num px-2 py-1.5 text-right font-semibold">
+                    <td
+                      className={cn(
+                        "num px-2 py-1.5 text-right font-semibold",
+                        !r.is_billable && "font-normal text-ink-dim",
+                      )}
+                      title={
+                        r.is_billable
+                          ? "facturado como overage"
+                          : "consumo a precio de API — esta cuenta es de tarifa plana"
+                      }
+                    >
+                      {r.is_billable ? "" : "≈"}
                       {money(r.cost_usd)}
                     </td>
-                    <td className="num px-2 py-1.5 text-right text-ink-dim">
+                    <td className="num px-2 py-1.5 text-right text-ink-faint">
                       {money(r.cost_per_turn)}
                     </td>
                     <td className="num px-2 py-1.5 text-right text-ink-dim">{r.turns}</td>

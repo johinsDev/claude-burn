@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { api, compositionRows, compositionTotal } from "@/lib/api";
 import { useAsyncData, useInterval } from "@/hooks/use-async-data";
 import { Badge, Button, Meter } from "@/components/ui/primitives";
-import { ago, limitTone, money, pct, toneClass, until } from "@/lib/format";
+import { ago, limitTone, money, pct, resetState, toneClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -81,7 +81,8 @@ export function TrayPopover() {
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
         {theoretical > 0.005 ? (
           <p className="text-[10.5px] leading-snug text-ink-faint">
-            + {money(theoretical)} en cuentas de tarifa plana (no facturado)
+            + {money(theoretical)} de consumo en cuentas de tarifa plana — valor
+            de API, no se factura
           </p>
         ) : null}
 
@@ -93,9 +94,15 @@ export function TrayPopover() {
         {limits.length > 0 ? (
           <Section title="Limites del plan">
             {limits.map((l) => {
-              const tone = limitTone(l.percent);
+              const reset = resetState(l.resets_at);
+              // Un limite ya reiniciado muestra un porcentaje muerto: se
+              // atenua para que no se lea como consumo de ahora.
+              const tone = reset.stale ? "ok" : limitTone(l.percent);
               return (
-                <div key={`${l.account}-${l.kind}`} className="space-y-1">
+                <div
+                  key={`${l.account}-${l.kind}`}
+                  className={cn("space-y-1", reset.stale && "opacity-45")}
+                >
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="truncate text-[11px] text-ink-dim">
                       {l.account} · {limitLabel(l.kind)}
@@ -104,9 +111,9 @@ export function TrayPopover() {
                       {l.percent.toFixed(0)}%
                     </span>
                   </div>
-                  <Meter value={l.percent} tone={tone} />
+                  <Meter value={reset.stale ? 0 : l.percent} tone={tone} />
                   <div className="flex justify-between text-[10px] text-ink-faint">
-                    <span>reinicia {until(l.resets_at)}</span>
+                    <span>{reset.label}</span>
                     <span>{ago(l.fetched)}</span>
                   </div>
                 </div>

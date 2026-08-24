@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { api, type SessionRow } from "@/lib/api";
+import { api, type SessionRow, type TurnPoint } from "@/lib/api";
 import { useAsyncData } from "@/hooks/use-async-data";
 import { Badge, Button, Empty, Stat } from "@/components/ui/primitives";
 import { ChartFrame, fmt, tooltipStyle } from "@/components/ui/chart-frame";
@@ -53,6 +53,30 @@ export function SessionDetail({
       })),
     [points],
   );
+
+  /**
+   * De donde sale el $ por turno: cuanto se fue en releer y cuanto en escribir.
+   *
+   * Es la respuesta a "que es este numero". En una sesion inflada el turno
+   * promedio lee cientos de miles de tokens para escribir unos cientos, y la
+   * factura sigue esa proporcion.
+   */
+  const perTurn = useMemo(() => {
+    if (!points?.length) return null;
+    const n = points.length;
+    const sum = (f: (p: TurnPoint) => number) => points.reduce((a, p) => a + f(p), 0) / n;
+    const read = sum((p) => p.read_tok);
+    const out = sum((p) => p.out_tok);
+    return {
+      readTok: read,
+      outTok: out,
+      readCost: sum((p) => p.cost_read),
+      outCost: sum((p) => p.cost_output),
+      ratio: out > 0 ? read / out : 0,
+      agents: new Set(points.filter((p) => p.agent_id).map((p) => p.agent_id)).size,
+      agentTurns: points.filter((p) => p.agent_id).length,
+    };
+  }, [points]);
 
   // Cuanto habria costado la sesion si el contexto no hubiera crecido mas alla
   // del umbral de aviso. Es una cota gruesa, pero ordena la magnitud.
@@ -105,6 +129,34 @@ export function SessionDetail({
             sub={session.compactions === 0 ? "nunca se limpio" : undefined}
           />
         </div>
+
+        {perTurn ? (
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-line px-5 py-2.5 text-[11px]">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+              turno promedio
+            </span>
+            <span className="text-ink-dim">
+              lee{" "}
+              <span className="num font-semibold text-crit">{tokens(perTurn.readTok)}</span>{" "}
+              → {money(perTurn.readCost)}
+            </span>
+            <span className="text-ink-dim">
+              escribe{" "}
+              <span className="num font-semibold text-ok">{tokens(perTurn.outTok)}</span> →{" "}
+              {money(perTurn.outCost)}
+            </span>
+            {perTurn.ratio > 1 ? (
+              <span className={cn(perTurn.ratio > 100 ? toneClass.crit : "text-ink-dim")}>
+                lee {Math.round(perTurn.ratio)}× lo que escribe
+              </span>
+            ) : null}
+            {perTurn.agents > 0 ? (
+              <span className="ml-auto text-ink-faint">
+                {perTurn.agents} subagentes · {perTurn.agentTurns} de {points?.length} turnos
+              </span>
+            ) : null}
+          </div>
+        ) : null}
 
         {loading ? (
           <Empty>cargando turnos…</Empty>

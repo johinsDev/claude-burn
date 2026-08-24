@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import { compositionRows, compositionTotal, type Overview as OverviewData } from "@/lib/api";
 import { Badge, Meter, Panel, PanelHead, Stat } from "@/components/ui/primitives";
-import { ago, limitTone, money, pct, toneClass, until } from "@/lib/format";
+import { ago, limitTone, money, pct, resetState, toneClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ChartFrame, fmt, tooltipStyle } from "@/components/ui/chart-frame";
 
@@ -50,7 +50,7 @@ export function Overview({ data }: { data: OverviewData }) {
             value={money(data.today_billable_usd)}
             sub={
               theoretical > 0.005
-                ? `+ ${money(theoretical)} tarifa plana`
+                ? `+ ${money(theoretical)} de consumo en tarifa plana`
                 : "solo cuentas con overage"
             }
           />
@@ -192,9 +192,13 @@ export function Overview({ data }: { data: OverviewData }) {
                 a.plan_usage?.limits
                   .filter((l) => l.is_active)
                   .map((l) => {
-                    const tone = limitTone(l.percent);
+                    const reset = resetState(l.resets_at);
+                    const tone = reset.stale ? "ok" : limitTone(l.percent);
                     return (
-                      <div key={l.kind} className="space-y-1">
+                      <div
+                        key={l.kind}
+                        className={cn("space-y-1", reset.stale && "opacity-45")}
+                      >
                         <div className="flex items-baseline justify-between">
                           <span className="text-[11px] text-ink-dim">
                             {l.kind === "session" ? "sesion (5 h)" : "semanal"}
@@ -203,10 +207,8 @@ export function Overview({ data }: { data: OverviewData }) {
                             {l.percent.toFixed(0)}%
                           </span>
                         </div>
-                        <Meter value={l.percent} tone={tone} />
-                        <div className="text-[10px] text-ink-faint">
-                          reinicia {until(l.resets_at)}
-                        </div>
+                        <Meter value={reset.stale ? 0 : l.percent} tone={tone} />
+                        <div className="text-[10px] text-ink-faint">{reset.label}</div>
                       </div>
                     );
                   })
