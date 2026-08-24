@@ -50,8 +50,12 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<TrayIcon<R>> {
 
 /// Refresca el texto del icono con el gasto de hoy y el limite mas apretado.
 pub fn refresh_tray<R: Runtime>(app: &AppHandle<R>) {
-    let Some(state) = app.try_state::<AppState>() else { return };
-    let Ok(overview) = build_overview(&state) else { return };
+    let Some(state) = app.try_state::<AppState>() else {
+        return;
+    };
+    let Ok(overview) = build_overview(&state) else {
+        return;
+    };
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         let _ = tray.set_title(Some(overview.tray.title()));
     }
@@ -67,7 +71,9 @@ pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
 
 /// Abre o cierra el popover, anclado debajo del icono.
 fn toggle_popover<R: Runtime>(app: &AppHandle<R>, icon_x: f64, icon_y: f64) {
-    let Some(win) = app.get_webview_window("tray") else { return };
+    let Some(win) = app.get_webview_window("tray") else {
+        return;
+    };
     if win.is_visible().unwrap_or(false) {
         let _ = win.hide();
         return;
@@ -87,7 +93,9 @@ fn position_under_icon<R: Runtime>(win: &WebviewWindow<R>, icon_x: f64, icon_y: 
     let mut x = icon_x - w / 2.0;
     if let Ok(Some(monitor)) = win.current_monitor() {
         let screen_right = (monitor.position().x as f64) + (monitor.size().width as f64);
-        x = x.min(screen_right - w - 8.0 * scale).max(monitor.position().x as f64 + 8.0 * scale);
+        x = x
+            .min(screen_right - w - 8.0 * scale)
+            .max(monitor.position().x as f64 + 8.0 * scale);
     }
     let y = icon_y + 6.0 * scale;
     let _ = win.set_position(tauri::PhysicalPosition::new(x, y));

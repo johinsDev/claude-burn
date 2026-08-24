@@ -15,7 +15,10 @@ impl AppState {
     pub fn new() -> Result<Self> {
         let db = Store::open(&burn_core::default_db_path())?;
         let profiles = burn_core::profiles::discover()?;
-        Ok(Self { db: Mutex::new(db), profiles: Mutex::new(profiles) })
+        Ok(Self {
+            db: Mutex::new(db),
+            profiles: Mutex::new(profiles),
+        })
     }
 
     /// Sincroniza y devuelve cuantos turnos nuevos entraron.

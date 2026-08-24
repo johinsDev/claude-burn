@@ -89,6 +89,11 @@ CREATE TABLE IF NOT EXISTS budgets (
     PRIMARY KEY (scope, period)
 );
 
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS alerts (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     kind         TEXT NOT NULL,
@@ -406,6 +411,63 @@ impl Store {
             params![kind, key, fired_at_ms, payload],
         )?;
         Ok(())
+    }
+
+    /// Gasto de hoy por modelo. Alimenta la alerta de modelo caro.
+    pub fn cost_by_model_on_day(&self, day: &str) -> Result<Vec<(String, f64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT COALESCE(model, raw_model), SUM(cost_usd) FROM turns
+             WHERE day = ?1 GROUP BY COALESCE(model, raw_model) ORDER BY 2 DESC",
+        )?;
+        let rows = stmt
+            .query_map(params![day], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Ultimo tamano de contexto visto en una sesion. Para una sesion viva es
+    /// su contexto actual.
+    pub fn latest_context(&self, session_id: &str) -> Result<Option<i64>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT ctx_tok FROM turns WHERE session_id = ?1 ORDER BY ts DESC LIMIT 1",
+                params![session_id],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = ?1",
+                params![key],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = ?2",
+            params![key, value],
+        )?;
+        Ok(())
+    }
+
+    /// Historial de alertas disparadas, mas recientes primero.
+    pub fn recent_alerts(&self, limit: i64) -> Result<Vec<(String, i64, String)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT kind, fired_at_ms, payload_json FROM alerts
+             ORDER BY fired_at_ms DESC LIMIT ?1",
+        )?;
+        let rows = stmt
+            .query_map(params![limit], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
     }
 
     pub fn set_budget(&self, scope: &str, period: &str, limit_usd: f64) -> Result<()> {

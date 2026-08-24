@@ -12,10 +12,26 @@ totales; esta muestra *en que sesion* y *en que turno* se fue la plata.
 ## Estado
 
 - [x] **M1** — `burn-core` + CLI: ingesta incremental, deduplicacion, motor de costo, SQLite
-- [ ] **M2** — Shell Tauri: tray icon, popover, Overview
-- [ ] **M3** — Drill-down: tabla de sesiones, detalle de sesion, modelos
-- [ ] **M4** — Daemon: watcher, sesiones vivas, limites del plan, alertas
-- [ ] **M5** — Empaquetado: ajustes, presupuestos, autostart, `.dmg`
+- [x] **M2** — Shell Tauri: tray icon, popover, Resumen
+- [x] **M3** — Drill-down: tabla de sesiones, detalle de sesion, modelos
+- [x] **M4** — Daemon: watcher, sesiones vivas, limites del plan, las 4 alertas
+- [ ] **M5** — Empaquetado: autostart, firma, `.dmg`
+
+## Las cuatro alertas
+
+| Alerta | Cuando |
+|---|---|
+| Presupuesto | El gasto **facturable** del dia/semana/mes cruza 50/75/90/100% del techo |
+| Contexto inflado | Una sesion **viva** pasa 250k (aviso) o 500k (critico) de contexto |
+| Limite del plan | Un limite activo de `cachedUsageUtilization` pasa 75% o 90% |
+| Modelo caro | Un modelo de tarifa premium se lleva mas de la mitad del dia |
+
+El cooldown va por `(tipo, clave)` y la clave incluye el escalon alcanzado:
+subir de 75% a 90% notifica de nuevo, pero quedarse en 78% no repite.
+
+"Caro" no es una lista fija de modelos: es cualquiera cuyo precio de salida
+supere al de Opus 5, leido de la misma tabla de precios. Cuando salga un modelo
+nuevo, la regla ya lo cubre.
 
 ## CLI
 
@@ -30,6 +46,14 @@ cargo run --release --bin burn-cli -- plan          # limites del plan y sesione
 ```
 
 `BURN_DB=/ruta/burn.sqlite` cambia la base; por defecto va al data dir del SO.
+
+## Como se mantiene al dia
+
+Un watcher (`notify`) vigila `projects/` en recursivo, `sessions/` y
+`.claude.json` de cada cuenta. Debounce de 900 ms — Claude escribe muchas
+lineas seguidas y sincronizar en cada una lee JSON a medio escribir. Cada
+90 s revisa igual aunque nada se mueva, porque los limites del plan se
+refrescan en `.claude.json` sin tocar ningun transcript.
 
 ## De donde salen los datos
 

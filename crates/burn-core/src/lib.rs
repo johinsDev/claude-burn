@@ -2,6 +2,7 @@
 //! de Claude Code. No depende de Tauri a proposito — se compila igual como
 //! biblioteca para la app y como CLI (`burn-cli`) para verificar los numeros.
 
+pub mod alerts;
 pub mod ingest;
 pub mod pricing;
 pub mod profiles;

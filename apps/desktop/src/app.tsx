@@ -11,12 +11,14 @@ import { TrayPopover } from "@/views/tray-popover";
 const Overview = lazy(() => import("@/views/overview").then((m) => ({ default: m.Overview })));
 const Sessions = lazy(() => import("@/views/sessions").then((m) => ({ default: m.Sessions })));
 const Models = lazy(() => import("@/views/models").then((m) => ({ default: m.Models })));
+const Alerts = lazy(() => import("@/views/alerts").then((m) => ({ default: m.Alerts })));
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { id: "overview", label: "Resumen" },
   { id: "sessions", label: "Sesiones" },
   { id: "models", label: "Modelos" },
+  { id: "alerts", label: "Alertas" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["id"];
@@ -89,8 +91,10 @@ function MainWindow() {
             )
           ) : tab === "sessions" ? (
             <Sessions />
-          ) : (
+          ) : tab === "models" ? (
             <Models />
+          ) : (
+            <Alerts />
           )}
         </Suspense>
       </main>

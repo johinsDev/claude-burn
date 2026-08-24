@@ -106,6 +106,31 @@ export type TurnPoint = {
   effort: string | null;
 };
 
+export type AlertConfig = {
+  budget_daily_usd: number | null;
+  budget_weekly_usd: number | null;
+  budget_monthly_usd: number | null;
+  budget_steps: number[];
+  limit_steps: number[];
+  context_warn_tokens: number;
+  context_critical_tokens: number;
+  expensive_share: number;
+  expensive_min_usd: number;
+  cooldown_minutes: number;
+};
+
+export type FiredAlert = {
+  kind: string;
+  fired_at_ms: number;
+  alert: {
+    kind: string;
+    key: string;
+    title: string;
+    body: string;
+    severity: "info" | "warn" | "critical";
+  };
+};
+
 export const api = {
   overview: () => invoke<Overview>("overview"),
   syncNow: () => invoke<number>("sync_now"),
@@ -117,6 +142,9 @@ export const api = {
   budgets: () => invoke<[string, string, number][]>("budgets"),
   setBudget: (scope: string, period: string, limitUsd: number) =>
     invoke<void>("set_budget", { scope, period, limitUsd }),
+  alertConfig: () => invoke<AlertConfig>("alert_config"),
+  setAlertConfig: (config: AlertConfig) => invoke<void>("set_alert_config", { config }),
+  recentAlerts: (limit?: number) => invoke<FiredAlert[]>("recent_alerts", { limit }),
 };
 
 /** Desglosa la composicion en filas ordenadas, la forma que consumen los graficos. */

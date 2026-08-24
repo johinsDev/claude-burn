@@ -149,12 +149,22 @@ pub fn sync_now(state: State<'_, AppState>) -> Res<usize> {
 
 #[tauri::command]
 pub fn sessions(state: State<'_, AppState>, limit: Option<i64>) -> Res<Vec<SessionRow>> {
-    state.db.lock().unwrap().top_sessions(limit.unwrap_or(200)).map_err(err)
+    state
+        .db
+        .lock()
+        .unwrap()
+        .top_sessions(limit.unwrap_or(200))
+        .map_err(err)
 }
 
 #[tauri::command]
 pub fn session_timeline(state: State<'_, AppState>, session_id: String) -> Res<Vec<TurnPoint>> {
-    state.db.lock().unwrap().session_timeline(&session_id).map_err(err)
+    state
+        .db
+        .lock()
+        .unwrap()
+        .session_timeline(&session_id)
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -173,8 +183,18 @@ pub fn budgets(state: State<'_, AppState>) -> Res<Vec<(String, String, f64)>> {
 }
 
 #[tauri::command]
-pub fn set_budget(state: State<'_, AppState>, scope: String, period: String, limit_usd: f64) -> Res<()> {
-    state.db.lock().unwrap().set_budget(&scope, &period, limit_usd).map_err(err)
+pub fn set_budget(
+    state: State<'_, AppState>,
+    scope: String,
+    period: String,
+    limit_usd: f64,
+) -> Res<()> {
+    state
+        .db
+        .lock()
+        .unwrap()
+        .set_budget(&scope, &period, limit_usd)
+        .map_err(err)
 }
 
 /// Trae la ventana principal al frente y esconde el popover.
@@ -205,4 +225,48 @@ pub fn hide_main_window(app: AppHandle) -> Res<()> {
     #[cfg(target_os = "macos")]
     let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
     Ok(())
+}
+
+#[tauri::command]
+pub fn alert_config(state: State<'_, AppState>) -> Res<burn_core::alerts::AlertConfig> {
+    Ok(crate::alerts::load_config(&state))
+}
+
+#[tauri::command]
+pub fn set_alert_config(
+    state: State<'_, AppState>,
+    config: burn_core::alerts::AlertConfig,
+) -> Res<()> {
+    crate::alerts::save_config(&state, &config).map_err(err)
+}
+
+/// Las alertas que ya se dispararon, mas recientes primero.
+#[tauri::command]
+pub fn recent_alerts(state: State<'_, AppState>, limit: Option<i64>) -> Res<Vec<FiredAlert>> {
+    state
+        .db
+        .lock()
+        .unwrap()
+        .recent_alerts(limit.unwrap_or(50))
+        .map(|rows| {
+            rows.into_iter()
+                .filter_map(|(kind, fired_at_ms, payload)| {
+                    serde_json::from_str::<serde_json::Value>(&payload)
+                        .ok()
+                        .map(|alert| FiredAlert {
+                            kind,
+                            fired_at_ms,
+                            alert,
+                        })
+                })
+                .collect()
+        })
+        .map_err(err)
+}
+
+#[derive(Serialize)]
+pub struct FiredAlert {
+    pub kind: String,
+    pub fired_at_ms: i64,
+    pub alert: serde_json::Value,
 }
