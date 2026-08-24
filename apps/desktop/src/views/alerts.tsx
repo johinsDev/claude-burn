@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { api, type AlertConfig, type FiredAlert } from "@/lib/api";
 import { Badge, Button, Empty, Panel, PanelHead } from "@/components/ui/primitives";
 import { useAsyncData } from "@/hooks/use-async-data";
@@ -29,7 +30,10 @@ export function Alerts() {
       {/* El formulario se siembra una vez con lo guardado y despues es la
           fuente de verdad; montarlo recien aca evita sincronizarlo a mano. */}
       <AlertSettings initial={loaded} />
-      <FiredList fired={fired} onReload={reloadFired} />
+      <div className="space-y-3">
+        <StartupPanel />
+        <FiredList fired={fired} onReload={reloadFired} />
+      </div>
     </div>
   );
 }
@@ -114,6 +118,33 @@ function AlertSettings({ initial }: { initial: AlertConfig }) {
           </div>
         </Panel>
     </div>
+  );
+}
+
+function StartupPanel() {
+  const { data: enabled, reload } = useAsyncData(() => isEnabled(), []);
+
+  const toggle = async () => {
+    await (enabled ? disable() : enable());
+    reload();
+  };
+
+  return (
+    <Panel>
+      <PanelHead
+        title="Arranque"
+        right={
+          <Button variant="solid" onClick={() => void toggle()}>
+            {enabled ? "Desactivar" : "Activar"}
+          </Button>
+        }
+      />
+      <p className="px-3.5 py-3 text-[11px] leading-snug text-ink-dim">
+        {enabled
+          ? "Arranca con el sistema. El medidor cuenta desde el primer turno del dia."
+          : "No arranca solo. Si la app esta cerrada no hay alertas: las de contexto solo sirven mientras la sesion sigue abierta."}
+      </p>
+    </Panel>
   );
 }
 

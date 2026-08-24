@@ -16,6 +16,7 @@
   "dependencies": {
     "@claude-burn/pricing": "workspace:*",
     "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-autostart": "^2.5.1",
     "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-opener": "^2.5.1",
     "class-variance-authority": "^0.7.1",

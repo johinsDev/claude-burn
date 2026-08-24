@@ -15,7 +15,20 @@ totales; esta muestra *en que sesion* y *en que turno* se fue la plata.
 - [x] **M2** — Shell Tauri: tray icon, popover, Resumen
 - [x] **M3** — Drill-down: tabla de sesiones, detalle de sesion, modelos
 - [x] **M4** — Daemon: watcher, sesiones vivas, limites del plan, las 4 alertas
-- [ ] **M5** — Empaquetado: autostart, firma, `.dmg`
+- [x] **M5** — Empaquetado: autostart, `.dmg`
+
+## Instalar
+
+```
+pnpm install
+pnpm --filter @claude-burn/desktop bundle
+open target/release/bundle/dmg/claude-burn_0.1.0_aarch64.dmg
+```
+
+El bundle no esta firmado, asi que la primera vez hay que abrirlo con click
+derecho → Abrir. El toggle de arranque automatico esta en la pestana Alertas;
+sin el, la app no corre y las alertas de contexto no sirven de nada, porque
+solo tienen sentido mientras la sesion sigue abierta.
 
 ## Las cuatro alertas
 
